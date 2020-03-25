@@ -160,13 +160,22 @@ export default class Drawer extends util.Observer {
      * rendered
      */
     drawPeaks(peaks, length, start, end) {
-        if (!this.setWidth(length)) {
-            this.clearWave();
-        }
+        // if (!this.setWidth(length)) {
+        //     this.clearWave();
+        // }
 
-        this.params.barWidth
-            ? this.drawBars(peaks, 0, start, end)
-            : this.drawWave(peaks, 0, start, end);
+        if (this.params.splitChannels) {
+            this.params.barWidth
+                ? this.drawBars(peaks, 0, start, end)
+                : this.drawWave(peaks, 0, start, end);
+            this.params.barWidth
+                ? this.drawBars(peaks, 1, start, end)
+                : this.drawWave(peaks, 1, start, end);
+        } else {
+            this.params.barWidth
+                ? this.drawBars(peaks, 0, start, end)
+                : this.drawWave(peaks, 0, start, end);
+        }
     }
 
     /**

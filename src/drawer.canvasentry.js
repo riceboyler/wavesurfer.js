@@ -38,6 +38,7 @@ export default class CanvasEntry {
          * @type {CanvasRenderingContext2D}
          */
         this.progressCtx = null;
+
         /**
          * Start of the area the canvas should render, between 0 and 1
          *

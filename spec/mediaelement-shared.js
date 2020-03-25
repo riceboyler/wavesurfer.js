@@ -12,7 +12,9 @@ export function sharedTests(backend) {
         const wave = TestHelpers.createWaveform({
             container: TestHelpers.createElement(),
             waveColor: 'red',
+            waveColor2: 'blue',
             progressColor: 'orange',
+            progressColor2: 'green',
             cursorColor: 'white',
             backend: backend
         });

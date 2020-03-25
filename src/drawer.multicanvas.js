@@ -173,43 +173,115 @@ export default class MultiCanvas extends Drawer {
      * @private
      */
     addCanvas() {
-        const entry = new this.EntryClass();
-        entry.canvasContextAttributes = this.canvasContextAttributes;
-        entry.hasProgressCanvas = this.hasProgressCanvas;
-        entry.halfPixel = this.halfPixel;
-        const leftOffset = this.maxCanvasElementWidth * this.canvases.length;
+        if (!this.params.splitChannels) {
+            const entry = new this.EntryClass();
+            entry.canvasContextAttributes = this.canvasContextAttributes;
+            entry.hasProgressCanvas = this.hasProgressCanvas;
+            entry.halfPixel = this.halfPixel;
+            const leftOffset =
+                this.maxCanvasElementWidth * this.canvases.length;
 
-        // wave
-        entry.initWave(
-            this.wrapper.appendChild(
-                this.style(document.createElement('canvas'), {
-                    position: 'absolute',
-                    zIndex: 2,
-                    left: leftOffset + 'px',
-                    top: 0,
-                    bottom: 0,
-                    height: '100%',
-                    pointerEvents: 'none'
-                })
-            )
-        );
-
-        // progress
-        if (this.hasProgressCanvas) {
-            entry.initProgress(
-                this.progressWave.appendChild(
+            // wave
+            entry.initWave(
+                this.wrapper.appendChild(
                     this.style(document.createElement('canvas'), {
                         position: 'absolute',
+                        zIndex: 2,
                         left: leftOffset + 'px',
                         top: 0,
                         bottom: 0,
-                        height: '100%'
+                        height: '100%',
+                        pointerEvents: 'none'
                     })
                 )
             );
-        }
 
-        this.canvases.push(entry);
+            // progress
+            if (this.hasProgressCanvas) {
+                entry.initProgress(
+                    this.progressWave.appendChild(
+                        this.style(document.createElement('canvas'), {
+                            position: 'absolute',
+                            left: leftOffset + 'px',
+                            top: 0,
+                            bottom: 0,
+                            height: '100%'
+                        })
+                    )
+                );
+            }
+
+            this.canvases.push(entry);
+        } else {
+            const entryL = new this.EntryClass();
+            entryL.canvasContextAttributes = this.canvasContextAttributes;
+            entryL.hasProgressCanvas = this.hasProgressCanvas;
+            entryL.halfPixel = this.halfPixel;
+            const leftOffset =
+                this.maxCanvasElementWidth * this.canvases.length;
+
+            const entryR = new this.EntryClass();
+            entryR.canvasContextAttributes = this.canvasContextAttributes;
+            entryR.hasProgressCanvas = this.hasProgressCanvas;
+            entryR.halfPixel = this.halfPixel;
+
+            // wave
+            entryL.initWave(
+                this.wrapper.appendChild(
+                    this.style(document.createElement('canvas'), {
+                        position: 'absolute',
+                        zIndex: 2,
+                        left: leftOffset + 'px',
+                        top: 0,
+                        bottom: 0,
+                        height: '50%',
+                        pointerEvents: 'none'
+                    })
+                )
+            );
+
+            entryR.initWave(
+                this.wrapper.appendChild(
+                    this.style(document.createElement('canvas'), {
+                        position: 'absolute',
+                        zIndex: 2,
+                        left: leftOffset + 'px',
+                        top: '50%',
+                        bottom: 0,
+                        height: '50%',
+                        pointerEvents: 'none'
+                    })
+                )
+            );
+
+            // progress
+            if (this.hasProgressCanvas) {
+                entryL.initProgress(
+                    this.progressWave.appendChild(
+                        this.style(document.createElement('canvas'), {
+                            position: 'absolute',
+                            left: leftOffset + 'px',
+                            top: 0,
+                            bottom: 0,
+                            height: '50%'
+                        })
+                    )
+                );
+                entryR.initProgress(
+                    this.progressWave.appendChild(
+                        this.style(document.createElement('canvas'), {
+                            position: 'absolute',
+                            left: leftOffset + 'px',
+                            top: '50%',
+                            bottom: 0,
+                            height: '50%'
+                        })
+                    )
+                );
+            }
+
+            this.canvases.push(entryL, entryR);
+        }
     }
 
     /**
@@ -277,55 +349,112 @@ export default class MultiCanvas extends Drawer {
      * @returns {void}
      */
     drawBars(peaks, channelIndex, start, end) {
-        return this.prepareDraw(
-            peaks,
-            channelIndex,
-            start,
-            end,
-            ({ absmax, hasMinVals, height, offsetY, halfH, peaks }) => {
-                // if drawBars was called within ws.empty we don't pass a start and
-                // don't want anything to happen
-                if (start === undefined) {
-                    return;
+        if (this.params.splitChannels && peaks[0] instanceof Array) {
+            return peaks.map(peakArray => {
+                return this.prepareDraw(
+                    peakArray,
+                    channelIndex,
+                    start,
+                    end,
+                    ({ absmax, hasMinVals, height, offsetY, halfH, peaks }) => {
+                        // if drawBars was called within ws.empty we don't pass a start and
+                        // don't want anything to happen
+                        if (start === undefined) {
+                            return;
+                        }
+                        // Skip every other value if there are negatives.
+                        const peakIndexScale = hasMinVals ? 2 : 1;
+                        const length = peaks.length / peakIndexScale;
+                        const bar =
+                            this.params.barWidth * this.params.pixelRatio;
+                        const gap =
+                            this.params.barGap === null
+                                ? Math.max(this.params.pixelRatio, ~~(bar / 2))
+                                : Math.max(
+                                      this.params.pixelRatio,
+                                      this.params.barGap *
+                                          this.params.pixelRatio
+                                  );
+                        const step = bar + gap;
+
+                        const scale = length / this.width;
+                        const first = start;
+                        const last = end;
+                        let i = first;
+
+                        for (i; i < last; i += step) {
+                            const peak =
+                                peaks[Math.floor(i * scale * peakIndexScale)] ||
+                                0;
+                            let h = Math.round((peak / absmax) * halfH);
+
+                            /* in case of silences, allow the user to specify that we
+                             * always draw *something* (normally a 1px high bar) */
+                            if (h == 0 && this.params.barMinHeight)
+                                h = this.params.barMinHeight;
+
+                            this.fillRect(
+                                i + this.halfPixel,
+                                halfH - h + offsetY,
+                                bar + this.halfPixel,
+                                h * 2,
+                                this.barRadius
+                            );
+                        }
+                    }
+                );
+            });
+        } else {
+            return this.prepareDraw(
+                peaks,
+                channelIndex,
+                start,
+                end,
+                ({ absmax, hasMinVals, height, offsetY, halfH, peaks }) => {
+                    // if drawBars was called within ws.empty we don't pass a start and
+                    // don't want anything to happen
+                    if (start === undefined) {
+                        return;
+                    }
+                    // Skip every other value if there are negatives.
+                    const peakIndexScale = hasMinVals ? 2 : 1;
+                    const length = peaks.length / peakIndexScale;
+                    const bar = this.params.barWidth * this.params.pixelRatio;
+                    const gap =
+                        this.params.barGap === null
+                            ? Math.max(this.params.pixelRatio, ~~(bar / 2))
+                            : Math.max(
+                                  this.params.pixelRatio,
+                                  this.params.barGap * this.params.pixelRatio
+                              );
+                    const step = bar + gap;
+
+                    const scale = length / this.width;
+                    const first = start;
+                    const last = end;
+                    let i = first;
+
+                    for (i; i < last; i += step) {
+                        const peak =
+                            peaks[Math.floor(i * scale * peakIndexScale)] || 0;
+                        let h = Math.round((peak / absmax) * halfH);
+
+                        /* in case of silences, allow the user to specify that we
+                         * always draw *something* (normally a 1px high bar) */
+                        if (h == 0 && this.params.barMinHeight)
+                            h = this.params.barMinHeight;
+
+                        this.fillRect(
+                            i + this.halfPixel,
+                            halfH - h + offsetY,
+                            bar + this.halfPixel,
+                            h * 2,
+                            this.barRadius
+                        );
+                    }
                 }
-                // Skip every other value if there are negatives.
-                const peakIndexScale = hasMinVals ? 2 : 1;
-                const length = peaks.length / peakIndexScale;
-                const bar = this.params.barWidth * this.params.pixelRatio;
-                const gap =
-                    this.params.barGap === null
-                        ? Math.max(this.params.pixelRatio, ~~(bar / 2))
-                        : Math.max(
-                              this.params.pixelRatio,
-                              this.params.barGap * this.params.pixelRatio
-                          );
-                const step = bar + gap;
-
-                const scale = length / this.width;
-                const first = start;
-                const last = end;
-                let i = first;
-
-                for (i; i < last; i += step) {
-                    const peak =
-                        peaks[Math.floor(i * scale * peakIndexScale)] || 0;
-                    let h = Math.round((peak / absmax) * halfH);
-
-                    /* in case of silences, allow the user to specify that we
-                     * always draw *something* (normally a 1px high bar) */
-                    if (h == 0 && this.params.barMinHeight)
-                        h = this.params.barMinHeight;
-
-                    this.fillRect(
-                        i + this.halfPixel,
-                        halfH - h + offsetY,
-                        bar + this.halfPixel,
-                        h * 2,
-                        this.barRadius
-                    );
-                }
-            }
-        );
+            );
+        }
     }
 
     /**
@@ -342,39 +471,92 @@ export default class MultiCanvas extends Drawer {
      * @returns {void}
      */
     drawWave(peaks, channelIndex, start, end) {
-        return this.prepareDraw(
-            peaks,
-            channelIndex,
-            start,
-            end,
-            ({ absmax, hasMinVals, height, offsetY, halfH, peaks }) => {
-                if (!hasMinVals) {
-                    const reflectedPeaks = [];
-                    const len = peaks.length;
-                    let i = 0;
-                    for (i; i < len; i++) {
-                        reflectedPeaks[2 * i] = peaks[i];
-                        reflectedPeaks[2 * i + 1] = -peaks[i];
+        if (this.params.splitChannels && peaks[0] instanceof Array) {
+            return peaks.map(peakArray => {
+                return this.prepareDraw(
+                    peakArray,
+                    channelIndex,
+                    start,
+                    end,
+                    ({ absmax, hasMinVals, height, offsetY, halfH, peaks }) => {
+                        if (!hasMinVals) {
+                            const reflectedPeaks = [];
+                            const len = peaks.length;
+                            let i = 0;
+                            for (i; i < len; i++) {
+                                reflectedPeaks[2 * i] = peaks[i];
+                                reflectedPeaks[2 * i + 1] = -peaks[i];
+                            }
+                            peaks = reflectedPeaks;
+                        }
+
+                        // if drawWave was called within ws.empty we don't pass a start and
+                        // end and simply want a flat line
+                        if (start !== undefined) {
+                            this.drawLine(
+                                peaks,
+                                absmax,
+                                halfH,
+                                offsetY,
+                                start,
+                                end,
+                                channelIndex
+                            );
+                        }
+
+                        // always draw a median line
+                        this.fillRect(
+                            0,
+                            halfH + offsetY - this.halfPixel,
+                            this.width,
+                            this.halfPixel,
+                            this.barRadius
+                        );
                     }
-                    peaks = reflectedPeaks;
-                }
-
-                // if drawWave was called within ws.empty we don't pass a start and
-                // end and simply want a flat line
-                if (start !== undefined) {
-                    this.drawLine(peaks, absmax, halfH, offsetY, start, end);
-                }
-
-                // always draw a median line
-                this.fillRect(
-                    0,
-                    halfH + offsetY - this.halfPixel,
-                    this.width,
-                    this.halfPixel,
-                    this.barRadius
                 );
-            }
-        );
+            });
+        } else {
+            return this.prepareDraw(
+                peaks,
+                channelIndex,
+                start,
+                end,
+                ({ absmax, hasMinVals, height, offsetY, halfH, peaks }) => {
+                    if (!hasMinVals) {
+                        const reflectedPeaks = [];
+                        const len = peaks.length;
+                        let i = 0;
+                        for (i; i < len; i++) {
+                            reflectedPeaks[2 * i] = peaks[i];
+                            reflectedPeaks[2 * i + 1] = -peaks[i];
+                        }
+                        peaks = reflectedPeaks;
+                    }
+
+                    // if drawWave was called within ws.empty we don't pass a start and
+                    // end and simply want a flat line
+                    if (start !== undefined) {
+                        this.drawLine(
+                            peaks,
+                            absmax,
+                            halfH,
+                            offsetY,
+                            start,
+                            end
+                        );
+                    }
+
+                    // always draw a median line
+                    this.fillRect(
+                        0,
+                        halfH + offsetY - this.halfPixel,
+                        this.width,
+                        this.halfPixel,
+                        this.barRadius
+                    );
+                }
+            );
+        }
     }
 
     /**
@@ -389,12 +571,26 @@ export default class MultiCanvas extends Drawer {
      * should be rendered
      * @param {number} end The x-offset of the end of the area that
      * should be rendered
+     * @param {number} channelIndex (optional) The index number of the channel
      */
-    drawLine(peaks, absmax, halfH, offsetY, start, end) {
-        this.canvases.forEach(entry => {
-            this.setFillStyles(entry);
-            entry.drawLines(peaks, absmax, halfH, offsetY, start, end);
-        });
+    drawLine(peaks, absmax, halfH, offsetY, start, end, channelIndex) {
+        if (this.params.splitChannels && this.canvases.length > 1) {
+            const entry = this.canvases[channelIndex];
+            this.setFillStyles(entry, channelIndex);
+            entry.drawLines(
+                peaks[channelIndex],
+                absmax,
+                halfH,
+                offsetY,
+                start,
+                end
+            );
+        } else {
+            this.canvases.forEach(entry => {
+                this.setFillStyles(entry, 0);
+                entry.drawLines(peaks, absmax, halfH, offsetY, start, end);
+            });
+        }
     }
 
     /**
@@ -459,19 +655,25 @@ export default class MultiCanvas extends Drawer {
      */
     prepareDraw(peaks, channelIndex, start, end, fn) {
         return util.frame(() => {
-            // Split channels and call this function with the channelIndex set
-            if (peaks[0] instanceof Array) {
+            // // Split channels and call this function with the channelIndex set
+            if (peaks && peaks.length && peaks[0] instanceof Array) {
                 const channels = peaks;
-                if (this.params.splitChannels) {
-                    this.setHeight(
-                        channels.length *
-                            this.params.height *
-                            this.params.pixelRatio
-                    );
-                    return channels.forEach((channelPeaks, i) =>
-                        this.prepareDraw(channelPeaks, i, start, end, fn)
-                    );
-                }
+                // if (this.params.splitChannels) {
+                //     this.setHeight(
+                //         channels.length *
+                //             this.params.height *
+                //             this.params.pixelRatio
+                //     );
+                //     return channels.forEach((channelPeaks, i) => {
+                //         return this.prepareDraw(
+                //             channelPeaks,
+                //             i,
+                //             start,
+                //             end,
+                //             fn
+                //         );
+                //     });
+                // }
                 peaks = channels[0];
             }
             // calculate maximum modulation value, either from the barHeight
@@ -492,12 +694,12 @@ export default class MultiCanvas extends Drawer {
             const halfH = height / 2;
 
             return fn({
-                absmax: absmax,
-                hasMinVals: hasMinVals,
-                height: height,
-                offsetY: offsetY,
-                halfH: halfH,
-                peaks: peaks
+                absmax,
+                hasMinVals,
+                height,
+                offsetY,
+                halfH,
+                peaks
             });
         })();
     }
@@ -507,9 +709,20 @@ export default class MultiCanvas extends Drawer {
      *
      * @private
      * @param {CanvasEntry} entry Target entry
+     * @param {number} channelIndex The channel number
      */
-    setFillStyles(entry) {
-        entry.setFillStyles(this.params.waveColor, this.params.progressColor);
+    setFillStyles(entry, channelIndex) {
+        if (channelIndex === 1) {
+            entry.setFillStyles(
+                this.params.waveColor2,
+                this.params.progressColor2
+            );
+        } else {
+            entry.setFillStyles(
+                this.params.waveColor,
+                this.params.progressColor
+            );
+        }
     }
 
     /**

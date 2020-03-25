@@ -4,7 +4,11 @@ var wavesurfer;
 window.onload = function() {
     wavesurfer = WaveSurfer.create({
         container: document.querySelector('#waveform'),
-        splitChannels: true
+        splitChannels: true,
+        waveColor: '#00F',
+        progressColor: '#F00',
+        waveColor2: '#0F0',
+        progressColor2: '#F0F'
     });
 
     wavesurfer.on('error', function(e) {
