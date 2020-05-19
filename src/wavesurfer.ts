@@ -18,7 +18,7 @@ import MediaElementWebAudio from "./mediaelement-webaudio";
 /** @external {MediaStreamConstraints} https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamConstraints */
 /** @external {AudioNode} https://developer.mozilla.org/de/docs/Web/API/AudioNode */
 
-interface WavesurferParams {
+export interface WavesurferParams {
     audioContext?: AudioContext;
     audioRate: number;
     audioScriptProcessor?: ScriptProcessorNode;
