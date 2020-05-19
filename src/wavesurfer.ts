@@ -25,6 +25,7 @@ export interface WavesurferParams {
     autoCenter?: boolean;
     autoCenterRate?: number;
     autoCenterImmediately?: boolean;
+    autoplay?: boolean;
     backend: "WebAudio" | "MediaElement" | "MediaElementWebAudio";
     backgroundColor?: string;
     barHeight?: number;
@@ -41,6 +42,7 @@ export interface WavesurferParams {
         desynchronized: boolean;
     };
     duration?: number;
+    elementPosition?: number;
     fillParent?: boolean;
     forceDecode?: boolean;
     height?: number;
@@ -83,6 +85,8 @@ export interface WavesurferParams {
         }[];
     };
 }
+
+export type Peaks = number[] | number[][];
 
 interface PluginDefinition {
     name: string;
@@ -1165,7 +1169,7 @@ export default class WaveSurfer extends util.Observer {
 
         if (typeof urlOrElt === "string") {
             url = urlOrElt;
-            this.backend.load(url, this.mediaContainer, peaks, preload);
+            this.backend.loadME(url, this.mediaContainer, peaks, preload);
         } else {
             const elt = urlOrElt;
             this.backend.loadElt(elt, peaks);

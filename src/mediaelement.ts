@@ -1,53 +1,44 @@
-import WebAudio from './webaudio';
-import * as util from './util';
+import WebAudio from "./webaudio";
+import * as util from "./util";
+import { WavesurferParams, Peaks } from "wavesurfer";
+
+interface MediaListeners {
+    error: () => void;
+    canplay: () => void;
+    ended: () => void;
+    play: () => void;
+    pause: () => void;
+    seeked: () => void;
+    volumechange: () => void;
+}
 
 /**
  * MediaElement backend
  */
 export default class MediaElement extends WebAudio {
+    private media: HTMLMediaElement;
+    private mediaType: "audio" | "video";
+    private elementPosition: number;
+    private volume: number;
+    private isMuted: boolean;
+    private _onPlayEnd: (time: number) => void;
+    private mediaListeners: MediaListeners;
+
     /**
      * Construct the backend
      *
      * @param {WavesurferParams} params Wavesurfer parameters
      */
-    constructor(params) {
+    constructor(params: WavesurferParams) {
         super(params);
-        /** @private */
         this.params = params;
-
-        /**
-         * Initially a dummy media element to catch errors. Once `_load` is
-         * called, this will contain the actual `HTMLMediaElement`.
-         * @private
-         */
-        this.media = {
-            currentTime: 0,
-            duration: 0,
-            paused: true,
-            playbackRate: 1,
-            play() {},
-            pause() {},
-            volume: 0
-        };
-
-        /** @private */
-        this.mediaType = params.mediaType.toLowerCase();
-        /** @private */
-        this.elementPosition = params.elementPosition;
-        /** @private */
-        this.peaks = null;
-        /** @private */
+        this.mediaType = params.mediaType || "audio";
+        this.elementPosition = params.elementPosition || 0;
+        this.peaks = [];
         this.playbackRate = 1;
-        /** @private */
         this.volume = 1;
-        /** @private */
         this.isMuted = false;
-        /** @private */
         this.buffer = null;
-        /** @private */
-        this.onPlayEnd = null;
-        /** @private */
-        this.mediaListeners = {};
     }
 
     /**
@@ -63,39 +54,43 @@ export default class MediaElement extends WebAudio {
      */
     _setupMediaListeners() {
         this.mediaListeners.error = () => {
-            this.fireEvent('error', 'Error loading media element');
+            this.fireEvent("error", "Error loading media element");
         };
         this.mediaListeners.canplay = () => {
-            this.fireEvent('canplay');
+            this.fireEvent("canplay");
         };
         this.mediaListeners.ended = () => {
-            this.fireEvent('finish');
+            this.fireEvent("finish");
         };
         // listen to and relay play, pause and seeked events to enable
         // playback control from the external media element
         this.mediaListeners.play = () => {
-            this.fireEvent('play');
+            this.fireEvent("play");
         };
         this.mediaListeners.pause = () => {
-            this.fireEvent('pause');
+            this.fireEvent("pause");
         };
-        this.mediaListeners.seeked = event => {
-            this.fireEvent('seek');
+        this.mediaListeners.seeked = () => {
+            this.fireEvent("seek");
         };
-        this.mediaListeners.volumechange = event => {
-            this.isMuted = this.media.muted;
-            if (this.isMuted) {
-                this.volume = 0;
-            } else {
-                this.volume = this.media.volume;
+        this.mediaListeners.volumechange = () => {
+            if (this.media != null) {
+                this.isMuted = this.media.muted;
+                if (this.isMuted) {
+                    this.volume = 0;
+                } else {
+                    this.volume = this.media.volume;
+                }
             }
-            this.fireEvent('volume');
+            this.fireEvent("volume");
         };
 
         // reset event listeners
-        Object.keys(this.mediaListeners).forEach(id => {
-            this.media.removeEventListener(id, this.mediaListeners[id]);
-            this.media.addEventListener(id, this.mediaListeners[id]);
+        Object.keys(this.mediaListeners).forEach((id) => {
+            if (this.media != null) {
+                this.media.removeEventListener(id, this.mediaListeners[id]);
+                this.media.addEventListener(id, this.mediaListeners[id]);
+            }
         });
     }
 
@@ -107,18 +102,18 @@ export default class MediaElement extends WebAudio {
             if (this.isPaused()) {
                 return;
             }
-            this.fireEvent('audioprocess', this.getCurrentTime());
+            this.fireEvent("audioprocess", this.getCurrentTime());
 
             // Call again in the next frame
             util.frame(onAudioProcess)();
         };
 
-        this.on('play', onAudioProcess);
+        this.on("play", onAudioProcess);
 
         // Update the progress one more time to prevent it from being stuck in
         // case of lower framerates
-        this.on('pause', () => {
-            this.fireEvent('audioprocess', this.getCurrentTime());
+        this.on("pause", () => {
+            this.fireEvent("audioprocess", this.getCurrentTime());
         });
     }
 
@@ -133,13 +128,18 @@ export default class MediaElement extends WebAudio {
      * @throws Will throw an error if the `url` argument is not a valid media
      * element.
      */
-    load(url, container, peaks, preload) {
+    public loadME(
+        url: string,
+        container: HTMLElement,
+        peaks: number[] | number[][],
+        preload: string
+    ) {
         const media = document.createElement(this.mediaType);
-        media.controls = this.params.mediaControls;
+        media.controls = Boolean(this.params.mediaControls);
         media.autoplay = this.params.autoplay || false;
-        media.preload = preload == null ? 'auto' : preload;
+        media.preload = preload == null ? "auto" : preload;
         media.src = url;
-        media.style.width = '100%';
+        media.style.width = "100%";
 
         const prevMedia = container.querySelector(this.mediaType);
         if (prevMedia) {
@@ -156,8 +156,8 @@ export default class MediaElement extends WebAudio {
      * @param {HTMLMediaElement} elt HTML5 Audio or Video element
      * @param {number[]|Number.<Array[]>} peaks Array of peak data
      */
-    loadElt(elt, peaks) {
-        elt.controls = this.params.mediaControls;
+    public loadElt(elt: HTMLMediaElement, peaks: number[] | number[][]) {
+        elt.controls = Boolean(this.params.mediaControls);
         elt.autoplay = this.params.autoplay || false;
 
         this._load(elt, peaks);
@@ -173,18 +173,18 @@ export default class MediaElement extends WebAudio {
      * element.
      * @private
      */
-    _load(media, peaks) {
+    private _load(media: HTMLMediaElement, peaks: Peaks) {
         // verify media element is valid
         if (
             !(media instanceof HTMLMediaElement) ||
-            typeof media.addEventListener === 'undefined'
+            typeof media.addEventListener === "undefined"
         ) {
-            throw new Error('media parameter is not a valid media element');
+            throw new Error("media parameter is not a valid media element");
         }
 
         // load must be called manually on iOS, otherwise peaks won't draw
         // until a user interaction triggers load --> 'ready' event
-        if (typeof media.load == 'function') {
+        if (typeof media.load == "function") {
             // Resets the media element and restarts the media resource. Any
             // pending events are discarded. How much media data is fetched is
             // still affected by the preload attribute.
@@ -194,7 +194,6 @@ export default class MediaElement extends WebAudio {
         this.media = media;
         this._setupMediaListeners();
         this.peaks = peaks;
-        this.onPlayEnd = null;
         this.buffer = null;
         this.isMuted = media.muted;
         this.setPlaybackRate(this.playbackRate);
@@ -206,7 +205,7 @@ export default class MediaElement extends WebAudio {
      *
      * @return {boolean} Media paused or not
      */
-    isPaused() {
+    isPaused(): boolean {
         return !this.media || this.media.paused;
     }
 
@@ -215,16 +214,19 @@ export default class MediaElement extends WebAudio {
      *
      * @return {number} Duration
      */
-    getDuration() {
+    getDuration(): number {
         if (this.explicitDuration) {
             return this.explicitDuration;
         }
-        let duration = (this.buffer || this.media).duration;
-        if (duration >= Infinity) {
-            // streaming audio
-            duration = this.media.seekable.end(0);
+        if (this.media) {
+            let duration = (this.buffer || this.media).duration;
+            if (duration >= Infinity) {
+                // streaming audio
+                duration = this.media.seekable.end(0);
+            }
+            return duration;
         }
-        return duration;
+        return 0;
     }
 
     /**
@@ -233,8 +235,8 @@ export default class MediaElement extends WebAudio {
      *
      * @return {number} Current time
      */
-    getCurrentTime() {
-        return this.media && this.media.currentTime;
+    getCurrentTime(): number {
+        return this.media?.currentTime ?? 0;
     }
 
     /**
@@ -251,8 +253,8 @@ export default class MediaElement extends WebAudio {
      *
      * @return {number} Playback rate
      */
-    getPlaybackRate() {
-        return this.playbackRate || this.media.playbackRate;
+    getPlaybackRate(): number {
+        return this.playbackRate || (this.media?.playbackRate ?? 1);
     }
 
     /**
@@ -260,7 +262,7 @@ export default class MediaElement extends WebAudio {
      *
      * @param {number} value Playback rate
      */
-    setPlaybackRate(value) {
+    setPlaybackRate(value: number) {
         this.playbackRate = value || 1;
         this.media.playbackRate = this.playbackRate;
     }
@@ -270,11 +272,17 @@ export default class MediaElement extends WebAudio {
      *
      * @param {number} start Position to start at in seconds
      */
-    seekTo(start) {
-        if (start != null) {
-            this.media.currentTime = start;
+    seekTo(start?: number, end?: number) {
+        if (start == null) {
+            start = 0;
         }
+        if (end == null) {
+            end = 0;
+        }
+
+        this.media.currentTime = start ?? 0;
         this.clearPlayEnd();
+        return { start, end };
     }
 
     /**
@@ -286,7 +294,7 @@ export default class MediaElement extends WebAudio {
      * @emits MediaElement#play
      * @return {Promise} Result
      */
-    play(start, end) {
+    play(start: number, end?: number): Promise<void> {
         this.seekTo(start);
         const promise = this.media.play();
         end && this.setPlayEnd(end);
@@ -298,17 +306,12 @@ export default class MediaElement extends WebAudio {
      * Pauses the loaded audio.
      *
      * @emits MediaElement#pause
-     * @return {Promise} Result
      */
     pause() {
-        let promise;
-
         if (this.media) {
-            promise = this.media.pause();
+            this.media.pause();
         }
         this.clearPlayEnd();
-
-        return promise;
     }
 
     /**
@@ -316,23 +319,21 @@ export default class MediaElement extends WebAudio {
      *
      * @param {number} end Where to end
      */
-    setPlayEnd(end) {
+    setPlayEnd(end: number) {
         this.clearPlayEnd();
 
-        this._onPlayEnd = time => {
+        this._onPlayEnd = (time) => {
             if (time >= end) {
                 this.pause();
                 this.seekTo(end);
             }
         };
-        this.on('audioprocess', this._onPlayEnd);
+        this.on("audioprocess", this._onPlayEnd);
     }
 
-    /** @private */
-    clearPlayEnd() {
+    private clearPlayEnd() {
         if (this._onPlayEnd) {
-            this.un('audioprocess', this._onPlayEnd);
-            this._onPlayEnd = null;
+            this.un("audioprocess", this._onPlayEnd);
         }
     }
 
@@ -346,7 +347,7 @@ export default class MediaElement extends WebAudio {
      * @return {number[]|Number.<Array[]>} Array of 2*<length> peaks or array of
      * arrays of peaks consisting of (max, min) values for each subrange.
      */
-    getPeaks(length, first, last) {
+    getPeaks(length: number, first: number, last: number): Peaks {
         if (this.buffer) {
             return super.getPeaks(length, first, last);
         }
@@ -360,25 +361,23 @@ export default class MediaElement extends WebAudio {
      * @returns {Promise} A Promise that resolves to `undefined` when there
      * are no errors.
      */
-    setSinkId(deviceId) {
+    setSinkId(deviceId: string): Promise<undefined> {
         if (deviceId) {
             if (!this.media.setSinkId) {
                 return Promise.reject(
-                    new Error('setSinkId is not supported in your browser')
+                    new Error("setSinkId is not supported in your browser")
                 );
             }
             return this.media.setSinkId(deviceId);
         }
 
-        return Promise.reject(new Error('Invalid deviceId: ' + deviceId));
+        return Promise.reject(new Error("Invalid deviceId: " + deviceId));
     }
 
     /**
      * Get the current volume
-     *
-     * @return {number} value A floating point value between 0 and 1.
      */
-    getVolume() {
+    getVolume(): number {
         return this.volume;
     }
 
@@ -387,7 +386,7 @@ export default class MediaElement extends WebAudio {
      *
      * @param {number} value A floating point value between 0 and 1.
      */
-    setVolume(value) {
+    setVolume(value: number) {
         this.volume = value;
         // no need to change when it's already at that volume
         if (this.media.volume !== this.volume) {
@@ -405,7 +404,7 @@ export default class MediaElement extends WebAudio {
         this.destroyed = true;
 
         // cleanup media event listeners
-        Object.keys(this.mediaListeners).forEach(id => {
+        Object.keys(this.mediaListeners).forEach((id) => {
             if (this.media) {
                 this.media.removeEventListener(id, this.mediaListeners[id]);
             }
@@ -418,7 +417,5 @@ export default class MediaElement extends WebAudio {
         ) {
             this.media.parentNode.removeChild(this.media);
         }
-
-        this.media = null;
     }
 }

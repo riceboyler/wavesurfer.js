@@ -1,5 +1,5 @@
 import * as util from "./util";
-import { WavesurferParams } from "./wavesurfer";
+import { WavesurferParams, Peaks } from "./wavesurfer";
 
 // using constants to prevent someone writing the string wrong
 enum States {
@@ -23,28 +23,24 @@ interface StateBehaviors {
 export default class WebAudio extends util.Observer {
     private ac: AudioContext;
     private offlineAc: OfflineAudioContext;
-    private params: WavesurferParams;
+    protected params: WavesurferParams;
     private lastPlay: number;
     private startPosition: number;
     private scheduledPause: null | number;
-    private states: {
-        [States.PLAYING]: {};
-        [States.PAUSED]: {};
-        [States.FINISHED]: {};
-    };
-    private buffer;
+    private states: StateBehaviors;
+    protected buffer: AudioBuffer | null;
     private filters: any[];
     private gainNode: GainNode;
-    private mergedPeaks: number[];
-    private peaks: number[] | null;
-    private playbackRate: number;
+    private mergedPeaks: Peaks;
+    protected peaks: Peaks;
+    protected playbackRate: number;
     private analyser: AnalyserNode;
     private scriptNode: ScriptProcessorNode;
     private source;
-    private splitPeaks: number[] | number[][];
-    private state;
-    private explicitDuration: number;
-    private destroyed: boolean;
+    private splitPeaks: Peaks;
+    private state: StateBehavior | null;
+    protected explicitDuration: number;
+    protected destroyed: boolean;
 
     /** scriptBufferSize: size of the processing buffer */
     static scriptBufferSize = 256;
@@ -119,7 +115,7 @@ export default class WebAudio extends util.Observer {
         this.buffer = null;
         this.filters = [];
         /** gainNode: allows to control audio volume */
-        this.peaks = null;
+        this.peaks = [];
         this.playbackRate = 1;
         this.source = null;
         this.splitPeaks = [];
@@ -348,7 +344,7 @@ export default class WebAudio extends util.Observer {
     /**
      * Set pre-decoded peaks
      */
-    public setPeaks(peaks: number[], duration?: number) {
+    public setPeaks(peaks: Peaks, duration?: number) {
         if (duration != null) {
             this.explicitDuration = duration;
         }
@@ -385,15 +381,10 @@ export default class WebAudio extends util.Observer {
      *
      * @param {number} length How many subranges to break the waveform into.
      * @param {number} first First sample in the required range.
-     * @param {number} last Last sample in the required range.
-     * @return {number[]|Number.<Array[]>} Array of 2*<length> peaks or array of arrays of
+     * @param {number} last Last sample in the required range.of arrays of
      * peaks consisting of (max, min) values for each subrange.
      */
-    public getPeaks(
-        length: number,
-        first: number,
-        last: number
-    ): number[] | number[][] {
+    public getPeaks(length: number, first: number, last: number): Peaks {
         if (this.peaks) {
             return this.peaks;
         }
@@ -464,7 +455,7 @@ export default class WebAudio extends util.Observer {
      * Get the position from 0 to 1
      */
     public getPlayedPercents(): number {
-        return this.state.getPlayedPercents.call(this);
+        return this.state ? this.state.getPlayedPercents.call(this) : 0;
     }
 
     private disconnectSource() {
@@ -620,12 +611,9 @@ export default class WebAudio extends util.Observer {
         // need to re-create source on each playback
         this.createSource();
 
-        const adjustedTime = this.seekTo(start, end);
+        const { start: _start, end: _end } = this.seekTo(start, end);
 
-        start = adjustedTime.start;
-        end = adjustedTime.end;
-
-        this.scheduledPause = end;
+        this.scheduledPause = _end;
 
         this.source.start(0, start);
 
@@ -657,7 +645,7 @@ export default class WebAudio extends util.Observer {
      * duration.
      */
     public getCurrentTime(): number {
-        return this.state.getCurrentTime.call(this);
+        return this.state ? this.state.getCurrentTime.call(this) : 0;
     }
 
     /**
