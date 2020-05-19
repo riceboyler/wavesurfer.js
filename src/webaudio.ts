@@ -2,9 +2,11 @@ import * as util from "./util";
 import { WavesurferParams } from "./wavesurfer";
 
 // using constants to prevent someone writing the string wrong
-const PLAYING = "playing";
-const PAUSED = "paused";
-const FINISHED = "finished";
+enum States {
+    PLAYING = "playing",
+    PAUSED = "paused",
+    FINISHED = "finished",
+}
 
 interface StateBehavior {
     init: () => void;
@@ -13,9 +15,9 @@ interface StateBehavior {
 }
 
 interface StateBehaviors {
-    [PLAYING]: StateBehavior;
-    [PAUSED]: StateBehavior;
-    [FINISHED]: StateBehavior;
+    [States.PLAYING]: StateBehavior;
+    [States.PAUSED]: StateBehavior;
+    [States.FINISHED]: StateBehavior;
 }
 
 export default class WebAudio extends util.Observer {
@@ -26,9 +28,9 @@ export default class WebAudio extends util.Observer {
     private startPosition: number;
     private scheduledPause: null | number;
     private states: {
-        [PLAYING]: {};
-        [PAUSED]: {};
-        [FINISHED]: {};
+        [States.PLAYING]: {};
+        [States.PAUSED]: {};
+        [States.FINISHED]: {};
     };
     private buffer;
     private filters: any[];
@@ -49,40 +51,40 @@ export default class WebAudio extends util.Observer {
     /** audioContext: allows to process audio with WebAudio API */
     private offlineAudioContext = null;
 
-    generateStateBehavior = (state: "playing" | "paused" | "finished") => {
-        let init;
-        let getPlayedPercents;
-        let getCurrentTime;
+    generateStateBehavior = (state: States) => {
+        let init: () => void;
+        let getPlayedPercents: () => number;
+        let getCurrentTime: () => number;
         switch (state) {
-            case PLAYING:
+            case States.PLAYING:
                 init = () => {
                     this.addOnAudioProcess();
                 };
-                getPlayedPercents = (): number => {
+                getPlayedPercents = () => {
                     const duration = this.getDuration();
                     return this.getCurrentTime() / duration || 0;
                 };
-                getCurrentTime = (): number => {
+                getCurrentTime = () => {
                     return this.startPosition + this.getPlayedTime();
                 };
                 break;
-            case PAUSED:
+            case States.PAUSED:
                 init = () => {
                     this.removeOnAudioProcess();
                 };
-                getPlayedPercents = (): number => {
+                getPlayedPercents = () => {
                     const duration = this.getDuration();
                     return this.getCurrentTime() / duration || 0;
                 };
-                getCurrentTime = (): number => this.startPosition;
+                getCurrentTime = () => this.startPosition;
                 break;
-            case FINISHED:
+            case States.FINISHED:
                 init = () => {
                     this.removeOnAudioProcess();
                     this.fireEvent("finish");
                 };
-                getPlayedPercents = (): number => 1;
-                getCurrentTime = (): number => this.getDuration();
+                getPlayedPercents = () => 1;
+                getCurrentTime = () => this.getDuration();
                 break;
         }
         return {
@@ -104,9 +106,15 @@ export default class WebAudio extends util.Observer {
         this.startPosition = 0;
         this.scheduledPause = null;
         this.states = {
-            [PLAYING]: Object.create(this.generateStateBehavior[PLAYING]),
-            [PAUSED]: Object.create(this.generateStateBehavior[PAUSED]),
-            [FINISHED]: Object.create(this.generateStateBehavior[FINISHED]),
+            [States.PLAYING]: Object.create(
+                this.generateStateBehavior[States.PLAYING]
+            ),
+            [States.PAUSED]: Object.create(
+                this.generateStateBehavior[States.PAUSED]
+            ),
+            [States.FINISHED]: Object.create(
+                this.generateStateBehavior[States.FINISHED]
+            ),
         };
         this.buffer = null;
         this.filters = [];
@@ -164,7 +172,7 @@ export default class WebAudio extends util.Observer {
         this.createScriptNode();
         this.createAnalyserNode();
 
-        this.setState(PAUSED);
+        this.setState(States.PAUSED);
         this.setPlaybackRate(this.params.audioRate);
         this.setLength(0);
     }
@@ -180,7 +188,7 @@ export default class WebAudio extends util.Observer {
         }
     }
 
-    private setState(state: "playing" | "paused" | "finished") {
+    private setState(state: States) {
         if (this.state !== this.states[state]) {
             this.state = this.states[state];
             this.state.init.call(this);
@@ -240,11 +248,11 @@ export default class WebAudio extends util.Observer {
             const time = this.getCurrentTime();
 
             if (time >= this.getDuration()) {
-                this.setState(FINISHED);
+                this.setState(States.FINISHED);
                 this.fireEvent("pause");
             } else if (time >= (this.scheduledPause ?? 0)) {
                 this.pause();
-            } else if (this.state === this.states[PLAYING]) {
+            } else if (this.state === this.states[States.PLAYING]) {
                 this.fireEvent("audioprocess", time);
             }
         };
@@ -535,7 +543,7 @@ export default class WebAudio extends util.Observer {
      * Used by `wavesurfer.isPlaying()` and `wavesurfer.playPause()`
      */
     public isPaused(): boolean {
-        return this.state !== this.states[PLAYING];
+        return this.state !== this.states[States.PLAYING];
     }
 
     /**
@@ -580,8 +588,8 @@ export default class WebAudio extends util.Observer {
         this.startPosition = innerStart;
         this.lastPlay = this.ac.currentTime;
 
-        if (this.state === this.states[FINISHED]) {
-            this.setState(PAUSED);
+        if (this.state === this.states[States.FINISHED]) {
+            this.setState(States.PAUSED);
         }
 
         return {
@@ -625,7 +633,7 @@ export default class WebAudio extends util.Observer {
             this.ac.resume && this.ac.resume();
         }
 
-        this.setState(PLAYING);
+        this.setState(States.PLAYING);
 
         this.fireEvent("play");
     }
@@ -639,7 +647,7 @@ export default class WebAudio extends util.Observer {
         this.startPosition += this.getPlayedTime();
         this.source && this.source.stop(0);
 
-        this.setState(PAUSED);
+        this.setState(States.PAUSED);
 
         this.fireEvent("pause");
     }
