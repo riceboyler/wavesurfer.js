@@ -58,7 +58,7 @@ export interface WavesurferParams {
     plugins?: PluginDefinition[];
     progressColor?: string;
     removeMediaElementOnDestroy?: boolean;
-    renderer?: () => Drawer | null;
+    renderer?: MultiCanvas | null;
     responsive?: boolean | number;
     rtl?: boolean;
     scrollParent?: boolean;
@@ -1316,7 +1316,7 @@ export default class WaveSurfer extends util.Observer {
         const peaks = this.backend.getPeaks(length, start, end);
         const arr = [].map.call(
             peaks,
-            (val) => Math.round(val * accuracy) / accuracy
+            (val: number) => Math.round(val * accuracy) / accuracy
         );
         return new Promise((resolve, reject) => {
             const json = JSON.stringify(arr);

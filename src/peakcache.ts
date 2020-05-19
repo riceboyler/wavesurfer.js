@@ -4,6 +4,8 @@
  * Is used if the option parameter `partialRender` is set to `true`
  */
 export default class PeakCache {
+    private peakCacheRanges: any[];
+    private peakCacheLength: number;
     /**
      * Instantiate cache
      */
@@ -19,33 +21,30 @@ export default class PeakCache {
          * Flat array with entries that are always in pairs to mark the
          * beginning and end of each subrange.  This is a convenience so we can
          * iterate over the pairs for easy set difference operations.
-         * @private
          */
         this.peakCacheRanges = [];
         /**
          * Length of the entire cachable region, used for resetting the cache
          * when this changes (zoom events, for instance).
-         * @private
          */
         this.peakCacheLength = -1;
     }
 
     /**
      * Add a range of peaks to the cache
-     *
-     * @param {number} length The length of the range
-     * @param {number} start The x offset of the start of the range
-     * @param {number} end The x offset of the end of the range
-     * @return {Number.<Array[]>} Array with arrays of numbers
      */
-    addRangeToPeakCache(length, start, end) {
-        if (length != this.peakCacheLength) {
+    public addRangeToPeakCache(
+        length: number,
+        start: number,
+        end: number
+    ): number[][] {
+        if (length !== this.peakCacheLength) {
             this.clearPeakCache();
             this.peakCacheLength = length;
         }
 
         // Return ranges that weren't in the cache before the call.
-        let uncachedRanges = [];
+        let uncachedRanges: number[] = [];
         let i = 0;
         // Skip ranges before the current start.
         while (
@@ -100,7 +99,7 @@ export default class PeakCache {
 
         // Push the uncached ranges into an array of arrays for ease of
         // iteration in the functions that call this.
-        const uncachedRangePairs = [];
+        const uncachedRangePairs: number[][] = [];
         for (i = 0; i < uncachedRanges.length; i += 2) {
             uncachedRangePairs.push([uncachedRanges[i], uncachedRanges[i + 1]]);
         }
@@ -110,16 +109,13 @@ export default class PeakCache {
 
     /**
      * For testing
-     *
-     * @return {Number.<Array[]>} Array with arrays of numbers
      */
-    getCacheRanges() {
-        const peakCacheRangePairs = [];
-        let i;
-        for (i = 0; i < this.peakCacheRanges.length; i += 2) {
+    public getCacheRanges(): number[][] {
+        const peakCacheRangePairs: number[][] = [];
+        for (let i = 0; i < this.peakCacheRanges.length; i += 2) {
             peakCacheRangePairs.push([
                 this.peakCacheRanges[i],
-                this.peakCacheRanges[i + 1]
+                this.peakCacheRanges[i + 1],
             ]);
         }
         return peakCacheRangePairs;
