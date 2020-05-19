@@ -1,9 +1,10 @@
-import * as util from './util';
-import MultiCanvas from './drawer.multicanvas';
-import WebAudio from './webaudio';
-import MediaElement from './mediaelement';
-import PeakCache from './peakcache';
-import MediaElementWebAudio from './mediaelement-webaudio';
+import * as util from "./util";
+import Drawer from "./drawer";
+import MultiCanvas from "./drawer.multicanvas";
+import WebAudio from "./webaudio";
+import MediaElement from "./mediaelement";
+import PeakCache from "./peakcache";
+import MediaElementWebAudio from "./mediaelement-webaudio";
 
 /*
  * This work is licensed under a BSD-3-Clause License.
@@ -17,179 +18,85 @@ import MediaElementWebAudio from './mediaelement-webaudio';
 /** @external {MediaStreamConstraints} https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamConstraints */
 /** @external {AudioNode} https://developer.mozilla.org/de/docs/Web/API/AudioNode */
 
-/**
- * @typedef {Object} WavesurferParams
- * @property {AudioContext} audioContext=null Use your own previously
- * initialized AudioContext or leave blank.
- * @property {number} audioRate=1 Speed at which to play audio. Lower number is
- * slower.
- * @property {ScriptProcessorNode} audioScriptProcessor=null Use your own previously
- * initialized ScriptProcessorNode or leave blank.
- * @property {boolean} autoCenter=true If a scrollbar is present, center the
- * waveform on current progress
- * @property {number} autoCenterRate=5 If autoCenter is active, rate at which the
- * waveform is centered
- * @property {boolean} autoCenterImmediately=false If autoCenter is active, immediately
- * center waveform on current progress
- * @property {string} backend='WebAudio' `'WebAudio'|'MediaElement'|'MediaElementWebAudio'` In most cases
- * you don't have to set this manually. MediaElement is a fallback for unsupported browsers.
- * MediaElementWebAudio allows to use WebAudio API also with big audio files, loading audio like with
- * MediaElement backend (HTML5 audio tag). You have to use the same methods of MediaElement backend for loading and
- * playback, giving also peaks, so the audio data are not decoded. In this way you can use WebAudio features, like filters,
- * also with audio with big duration. For example:
- * ` wavesurfer.load(url | HTMLMediaElement, peaks, preload, duration);
- *   wavesurfer.play();
- *   wavesurfer.setFilter(customFilter);
- * `
- * @property {string} backgroundColor=null Change background color of the
- * waveform container.
- * @property {number} barHeight=1 The height of the wave bars.
- * @property {number} barRadius=0 The radius of the wave bars. Makes bars rounded
- * @property {number} barGap=null The optional spacing between bars of the wave,
- * if not provided will be calculated in legacy format.
- * @property {number} barWidth=null Draw the waveform using bars.
- * @property {number} barMinHeight=null If specified, draw at least a bar of this height,
- * eliminating waveform gaps
- * @property {boolean} closeAudioContext=false Close and nullify all audio
- * contexts when the destroy method is called.
- * @property {!string|HTMLElement} container CSS selector or HTML element where
- * the waveform should be drawn. This is the only required parameter.
- * @property {string} cursorColor='#333' The fill color of the cursor indicating
- * the playhead position.
- * @property {number} cursorWidth=1 Measured in pixels.
- * @property {object} drawingContextAttributes={desynchronized: false} Drawing context
- * attributes.
- * @property {number} duration=null Optional audio length so pre-rendered peaks
- * can be display immediately for example.
- * @property {boolean} fillParent=true Whether to fill the entire container or
- * draw only according to `minPxPerSec`.
- * @property {boolean} forceDecode=false Force decoding of audio using web audio
- * when zooming to get a more detailed waveform.
- * @property {number} height=128 The height of the waveform. Measured in
- * pixels.
- * @property {boolean} hideScrollbar=false Whether to hide the horizontal
- * scrollbar when one would normally be shown.
- * @property {boolean} interact=true Whether the mouse interaction will be
- * enabled at initialization. You can switch this parameter at any time later
- * on.
- * @property {boolean} loopSelection=true (Use with regions plugin) Enable
- * looping of selected regions
- * @property {number} maxCanvasWidth=4000 Maximum width of a single canvas in
- * pixels, excluding a small overlap (2 * `pixelRatio`, rounded up to the next
- * even integer). If the waveform is longer than this value, additional canvases
- * will be used to render the waveform, which is useful for very large waveforms
- * that may be too wide for browsers to draw on a single canvas.
- * @property {boolean} mediaControls=false (Use with backend `MediaElement` or `MediaElementWebAudio`)
- * this enables the native controls for the media element
- * @property {string} mediaType='audio' (Use with backend `MediaElement` or `MediaElementWebAudio`)
- * `'audio'|'video'` ('video' only for `MediaElement`)
- * @property {number} minPxPerSec=20 Minimum number of pixels per second of
- * audio.
- * @property {boolean} normalize=false If true, normalize by the maximum peak
- * instead of 1.0.
- * @property {boolean} partialRender=false Use the PeakCache to improve
- * rendering speed of large waveforms
- * @property {number} pixelRatio=window.devicePixelRatio The pixel ratio used to
- * calculate display
- * @property {PluginDefinition[]} plugins=[] An array of plugin definitions to
- * register during instantiation, they will be directly initialised unless they
- * are added with the `deferInit` property set to true.
- * @property {string} progressColor='#555' The fill color of the part of the
- * waveform behind the cursor. When `progressColor` and `waveColor` are the same
- * the progress wave is not rendered at all.
- * @property {boolean} removeMediaElementOnDestroy=true Set to false to keep the
- * media element in the DOM when the player is destroyed. This is useful when
- * reusing an existing media element via the `loadMediaElement` method.
- * @property {Object} renderer=MultiCanvas Can be used to inject a custom
- * renderer.
- * @property {boolean|number} responsive=false If set to `true` resize the
- * waveform, when the window is resized. This is debounced with a `100ms`
- * timeout by default. If this parameter is a number it represents that timeout.
- * @property {boolean} rtl=false If set to `true`, renders waveform from
- * right-to-left.
- * @property {boolean} scrollParent=false Whether to scroll the container with a
- * lengthy waveform. Otherwise the waveform is shrunk to the container width
- * (see fillParent).
- * @property {number} skipLength=2 Number of seconds to skip with the
- * skipForward() and skipBackward() methods.
- * @property {boolean} splitChannels=false Render with separate waveforms for
- * the channels of the audio
- * @property {string} waveColor='#999' The fill color of the waveform after the
- * cursor.
- * @property {object} xhr={} XHR options. For example:
- * `let xhr = {
- *     cache: 'default',
- *     mode: 'cors',
- *     method: 'GET',
- *     credentials: 'same-origin',
- *     redirect: 'follow',
- *     referrer: 'client',
- *     headers: [
- *         {
- *             key: 'Authorization',
- *             value: 'my-token'
- *         }
- *     ]
- * };`
- */
+interface WavesurferParams {
+    audioContext?: AudioContext;
+    audioRate: number;
+    audioScriptProcessor?: ScriptProcessorNode;
+    autoCenter?: boolean;
+    autoCenterRate?: number;
+    autoCenterImmediately?: boolean;
+    backend: "WebAudio" | "MediaElement" | "MediaElementWebAudio";
+    backgroundColor?: string;
+    barHeight?: number;
+    barRadius?: number;
+    barGap?: number | null;
+    barWidth?: number | null;
+    barMinHeight?: number | null;
+    closeAudioContext?: boolean;
+    container: string | HTMLElement;
+    cursorColor?: string;
+    cursorWidth?: number;
+    dragSelection?: boolean;
+    drawingContextAttributes?: {
+        desynchronized: boolean;
+    };
+    duration?: number;
+    fillParent?: boolean;
+    forceDecode?: boolean;
+    height?: number;
+    hideScrollbar?: boolean;
+    interact?: boolean;
+    loopSelection?: boolean;
+    maxCanvasWidth?: number;
+    mediaContainer?: string | HTMLElement;
+    mediaControls?: boolean;
+    mediaType?: "audio" | "video";
+    minPxPerSec?: number;
+    normalize?: boolean;
+    partialRender?: boolean;
+    pixelRatio?: number;
+    plugins?: PluginDefinition[];
+    progressColor?: string;
+    removeMediaElementOnDestroy?: boolean;
+    renderer?: () => Drawer | null;
+    responsive?: boolean | number;
+    rtl?: boolean;
+    scrollParent?: boolean;
+    skipLength?: number;
+    splitChannels?: boolean;
+    splitChannelsOptions?: {
+        overlay?: boolean;
+        channelColors: {};
+        filterChannels: any[];
+    };
+    waveColor?: string;
+    xhr?: {
+        cache?: string;
+        mode?: string;
+        method?: "GET" | "POST";
+        credentials?: string;
+        redirect?: string;
+        referrer?: string;
+        headers?: {
+            key: string;
+            value: string;
+        }[];
+    };
+}
 
-/**
- * @typedef {Object} PluginDefinition
- * @desc The Object used to describe a plugin
- * @example wavesurfer.addPlugin(pluginDefinition);
- * @property {string} name The name of the plugin, the plugin instance will be
- * added as a property to the wavesurfer instance under this name
- * @property {?Object} staticProps The properties that should be added to the
- * wavesurfer instance as static properties
- * @property {?boolean} deferInit Don't initialise plugin
- * automatically
- * @property {Object} params={} The plugin parameters, they are the first parameter
- * passed to the plugin class constructor function
- * @property {PluginClass} instance The plugin instance factory, is called with
- * the dependency specified in extends. Returns the plugin class.
- */
+interface PluginDefinition {
+    name: string;
+    staticProps?: {};
+    deferInit?: boolean;
+    params?: {};
+    instance: PluginClass;
+}
 
-/**
- * @interface PluginClass
- *
- * @desc This is the interface which is implemented by all plugin classes. Note
- * that this only turns into an observer after being passed through
- * `wavesurfer.addPlugin`.
- *
- * @extends {Observer}
- */
 class PluginClass {
-    /**
-     * Plugin definition factory
-     *
-     * This function must be used to create a plugin definition which can be
-     * used by wavesurfer to correctly instantiate the plugin.
-     *
-     * It returns a `PluginDefinition` object representing the plugin.
-     *
-     * @param {Object} params={} The plugin params (specific to the plugin)
-     */
-    create(params) {}
-    /**
-     * Construct the plugin
-     *
-     * @param {Object} params={} The plugin params (specific to the plugin)
-     * @param {Object} ws The wavesurfer instance
-     */
-    constructor(params, ws) {}
-    /**
-     * Initialise the plugin
-     *
-     * Start doing something. This is called by
-     * `wavesurfer.initPlugin(pluginName)`
-     */
+    protected key?: string;
+    constructor(params: {}, ws: WaveSurfer) {}
+    create(params: {}) {}
     init() {}
-    /**
-     * Destroy the plugin instance
-     *
-     * Stop doing something. This is called by
-     * `wavesurfer.destroyPlugin(pluginName)`
-     */
     destroy() {}
 }
 
@@ -215,31 +122,30 @@ class PluginClass {
  * wavesurfer.load('example/media/demo.wav');
  */
 export default class WaveSurfer extends util.Observer {
-    /** @private */
-    defaultParams = {
-        audioContext: null,
-        audioScriptProcessor: null,
+    private defaultParams: WavesurferParams = {
+        audioContext: undefined,
+        audioScriptProcessor: undefined,
         audioRate: 1,
         autoCenter: true,
         autoCenterRate: 5,
         autoCenterImmediately: false,
-        backend: 'WebAudio',
-        backgroundColor: null,
+        backend: "WebAudio",
+        backgroundColor: "",
         barHeight: 1,
         barRadius: 0,
         barGap: null,
         barMinHeight: null,
-        container: null,
-        cursorColor: '#333',
+        container: "",
+        cursorColor: "#333",
         cursorWidth: 1,
         dragSelection: true,
         drawingContextAttributes: {
             // Boolean that hints the user agent to reduce the latency
             // by desynchronizing the canvas paint cycle from the event
             // loop
-            desynchronized: false
+            desynchronized: false,
         },
-        duration: null,
+        duration: 0,
         fillParent: true,
         forceDecode: false,
         height: 128,
@@ -247,16 +153,15 @@ export default class WaveSurfer extends util.Observer {
         interact: true,
         loopSelection: true,
         maxCanvasWidth: 4000,
-        mediaContainer: null,
+        mediaContainer: "",
         mediaControls: false,
-        mediaType: 'audio',
+        mediaType: "audio",
         minPxPerSec: 20,
         normalize: false,
         partialRender: false,
-        pixelRatio:
-            window.devicePixelRatio || screen.deviceXDPI / screen.logicalXDPI,
+        pixelRatio: window.devicePixelRatio,
         plugins: [],
-        progressColor: '#555',
+        progressColor: "#555",
         removeMediaElementOnDestroy: true,
         renderer: MultiCanvas,
         responsive: false,
@@ -269,59 +174,46 @@ export default class WaveSurfer extends util.Observer {
             channelColors: {},
             filterChannels: [],
         },
-        waveColor: '#999',
-        xhr: {}
+        waveColor: "#999",
+        xhr: {},
     };
 
-    /** @private */
-    backends = {
+    private backends = {
         MediaElement,
         WebAudio,
-        MediaElementWebAudio
+        MediaElementWebAudio,
     };
 
-    /**
-     * Instantiate this class, call its `init` function and returns it
-     *
-     * @param {WavesurferParams} params The wavesurfer parameters
-     * @return {Object} WaveSurfer instance
-     * @example const wavesurfer = WaveSurfer.create(params);
-     */
-    static create(params) {
+    //#region local variables
+    private params: WavesurferParams;
+    protected container: HTMLElement | null;
+    protected mediaContainer: HTMLElement | null;
+    private savedVolume: number;
+    private isMuted: boolean;
+    private tmpEvents: any[];
+    private currentRequest: util.Observer | null;
+    private arraybuffer;
+    private drawer;
+    private backend;
+    private peakCache;
+    private Drawer: (
+        container: HTMLElement | null,
+        params: WavesurferParams
+    ) => void;
+    private Backend: MediaElement | WebAudio | MediaElementWebAudio;
+    private initialisedPluginList: {};
+    private isDestroyed: boolean;
+    private isReady: boolean;
+    private _onResize: () => void;
+    //#endregion
+
+    static create(params: WavesurferParams): WaveSurfer {
         const wavesurfer = new WaveSurfer(params);
         return wavesurfer.init();
     }
 
-    /**
-     * The library version number is available as a static property of the
-     * WaveSurfer class
-     *
-     * @type {String}
-     * @example
-     * console.log('Using wavesurfer.js ' + WaveSurfer.VERSION);
-     */
-    static VERSION = __VERSION__;
-
-    /**
-     * Functions in the `util` property are available as a prototype property to
-     * all instances
-     *
-     * @type {Object}
-     * @example
-     * const wavesurfer = WaveSurfer.create(params);
-     * wavesurfer.util.style(myElement, { background: 'blue' });
-     */
-    util = util;
-
-    /**
-     * Functions in the `util` property are available as a static property of the
-     * WaveSurfer class
-     *
-     * @type {Object}
-     * @example
-     * WaveSurfer.util.style(myElement, { background: 'blue' });
-     */
-    static util = util;
+    util: {} = util;
+    static util: {} = util;
 
     /**
      * Initialise wavesurfer instance
@@ -331,7 +223,7 @@ export default class WaveSurfer extends util.Observer {
      * const wavesurfer = new WaveSurfer(params);
      * @returns {this} Wavesurfer instance
      */
-    constructor(params) {
+    constructor(params: WavesurferParams) {
         super();
         /**
          * Extract relevant parameters (or defaults)
@@ -339,120 +231,71 @@ export default class WaveSurfer extends util.Observer {
          */
         this.params = Object.assign({}, this.defaultParams, params);
 
-        /** @private */
         this.container =
-            'string' == typeof params.container
+            typeof this.params.container === "string"
                 ? document.querySelector(this.params.container)
                 : this.params.container;
 
-        if (!this.container) {
-            throw new Error('Container element not found');
+        if (this.container === null) {
+            throw new Error("Container element not found");
         }
 
         if (this.params.mediaContainer == null) {
-            /** @private */
             this.mediaContainer = this.container;
-        } else if (typeof this.params.mediaContainer == 'string') {
-            /** @private */
+        } else if (typeof this.params.mediaContainer == "string") {
             this.mediaContainer = document.querySelector(
                 this.params.mediaContainer
             );
         } else {
-            /** @private */
             this.mediaContainer = this.params.mediaContainer;
         }
 
         if (!this.mediaContainer) {
-            throw new Error('Media Container element not found');
+            throw new Error("Media Container element not found");
         }
 
-        if (this.params.maxCanvasWidth <= 1) {
-            throw new Error('maxCanvasWidth must be greater than 1');
-        } else if (this.params.maxCanvasWidth % 2 == 1) {
-            throw new Error('maxCanvasWidth must be an even number');
+        if (this.params.maxCanvasWidth) {
+            if (this.params.maxCanvasWidth <= 1) {
+                throw new Error("maxCanvasWidth must be greater than 1");
+            } else if (this.params.maxCanvasWidth % 2 === 1) {
+                throw new Error("maxCanvasWidth must be an even number");
+            }
         }
 
         if (this.params.rtl === true) {
-            util.style(this.container, { transform: 'rotateY(180deg)' });
+            util.style(this.container, { transform: "rotateY(180deg)" });
         }
 
         if (this.params.backgroundColor) {
             this.setBackgroundColor(this.params.backgroundColor);
         }
 
-        /**
-         * @private Used to save the current volume when muting so we can
-         * restore once unmuted
-         * @type {number}
-         */
         this.savedVolume = 0;
-
-        /**
-         * @private The current muted state
-         * @type {boolean}
-         */
         this.isMuted = false;
-
-        /**
-         * @private Will hold a list of event descriptors that need to be
-         * canceled on subsequent loads of audio
-         * @type {Object[]}
-         */
         this.tmpEvents = [];
-
-        /**
-         * @private Holds any running audio downloads
-         * @type {Observer}
-         */
         this.currentRequest = null;
-        /** @private */
         this.arraybuffer = null;
-        /** @private */
         this.drawer = null;
-        /** @private */
         this.backend = null;
-        /** @private */
         this.peakCache = null;
+        this.initialisedPluginList = {};
+        this.isDestroyed = false;
+        this.isReady = false;
 
         // cache constructor objects
-        if (typeof this.params.renderer !== 'function') {
-            throw new Error('Renderer parameter is invalid');
+        if (typeof this.params.renderer !== "function") {
+            throw new Error("Renderer parameter is invalid");
         }
-        /**
-         * @private The uninitialised Drawer class
-         */
         this.Drawer = this.params.renderer;
-        /**
-         * @private The uninitialised Backend class
-         */
-        // Back compat
-        if (this.params.backend == 'AudioElement') {
-            this.params.backend = 'MediaElement';
-        }
 
         if (
-            (this.params.backend == 'WebAudio' ||
-                this.params.backend === 'MediaElementWebAudio') &&
+            (this.params.backend == "WebAudio" ||
+                this.params.backend === "MediaElementWebAudio") &&
             !WebAudio.prototype.supportsWebAudio.call(null)
         ) {
-            this.params.backend = 'MediaElement';
+            this.params.backend = "MediaElement";
         }
         this.Backend = this.backends[this.params.backend];
-
-        /**
-         * @private map of plugin names that are currently initialised
-         */
-        this.initialisedPluginList = {};
-        /** @private */
-        this.isDestroyed = false;
-
-        /**
-         * Get the current ready status.
-         *
-         * @example const isReady = wavesurfer.isReady;
-         * @return {boolean}
-         */
-        this.isReady = false;
 
         // responsive debounced event listener. If this.params.responsive is not
         // set, this is never called. Use 100ms or this.params.responsive as
@@ -465,10 +308,10 @@ export default class WaveSurfer extends util.Observer {
                     !this.params.scrollParent
                 ) {
                     prevWidth = this.drawer.wrapper.clientWidth;
-                    this.drawer.fireEvent('redraw');
+                    this.drawer.fireEvent("redraw");
                 }
             },
-            typeof this.params.responsive === 'number'
+            typeof this.params.responsive === "number"
                 ? this.params.responsive
                 : 100
         );
@@ -482,9 +325,8 @@ export default class WaveSurfer extends util.Observer {
      * @example
      * var wavesurfer = new WaveSurfer(params);
      * wavesurfer.init();
-     * @return {this} The wavesurfer instance
      */
-    init() {
+    init(): WaveSurfer {
         this.registerPlugins(this.params.plugins);
         this.createDrawer();
         this.createBackend();
@@ -492,27 +334,27 @@ export default class WaveSurfer extends util.Observer {
         return this;
     }
 
+    // #region Plugins
+
     /**
      * Add and initialise array of plugins (if `plugin.deferInit` is falsey),
      * this function is called in the init function of wavesurfer
-     *
-     * @param {PluginDefinition[]} plugins An array of plugin definitions
-     * @emits {WaveSurfer#plugins-registered} Called with the array of plugin definitions
-     * @return {this} The wavesurfer instance
      */
-    registerPlugins(plugins) {
+    registerPlugins(plugins: PluginDefinition[] | undefined): WaveSurfer {
         // first instantiate all the plugins
-        plugins.forEach(plugin => this.addPlugin(plugin));
+        if (plugins && plugins.length) {
+            plugins.forEach((plugin) => this.addPlugin(plugin));
 
-        // now run the init functions
-        plugins.forEach(plugin => {
-            // call init function of the plugin if deferInit is falsey
-            // in that case you would manually use initPlugins()
-            if (!plugin.deferInit) {
-                this.initPlugin(plugin.name);
-            }
-        });
-        this.fireEvent('plugins-registered', plugins);
+            // now run the init functions
+            plugins.forEach((plugin) => {
+                // call init function of the plugin if deferInit is falsey
+                // in that case you would manually use initPlugins()
+                if (!plugin.deferInit) {
+                    this.initPlugin(plugin.name);
+                }
+            });
+        }
+        this.fireEvent("plugins-registered", plugins);
         return this;
     }
 
@@ -520,23 +362,19 @@ export default class WaveSurfer extends util.Observer {
      * Get a map of plugin names that are currently initialised
      *
      * @example wavesurfer.getPlugins();
-     * @return {Object} Object with plugin names
      */
-    getActivePlugins() {
+    getActivePlugins(): {} {
         return this.initialisedPluginList;
     }
 
     /**
      * Add a plugin object to wavesurfer
      *
-     * @param {PluginDefinition} plugin A plugin definition
-     * @emits {WaveSurfer#plugin-added} Called with the name of the plugin that was added
      * @example wavesurfer.addPlugin(WaveSurfer.minimap());
-     * @return {this} The wavesurfer instance
      */
-    addPlugin(plugin) {
+    addPlugin(plugin: PluginDefinition): WaveSurfer {
         if (!plugin.name) {
-            throw new Error('Plugin does not have a name!');
+            throw new Error("Plugin does not have a name!");
         }
         if (!plugin.instance) {
             throw new Error(
@@ -546,12 +384,15 @@ export default class WaveSurfer extends util.Observer {
 
         // staticProps properties are applied to wavesurfer instance
         if (plugin.staticProps) {
-            Object.keys(plugin.staticProps).forEach(pluginStaticProp => {
+            Object.keys(plugin.staticProps).forEach((pluginStaticProp) => {
                 /**
                  * Properties defined in a plugin definition's `staticProps` property are added as
                  * staticProps properties of the WaveSurfer instance
                  */
-                this[pluginStaticProp] = plugin.staticProps[pluginStaticProp];
+                if (plugin.staticProps) {
+                    this[pluginStaticProp] =
+                        plugin.staticProps[pluginStaticProp];
+                }
             });
         }
 
@@ -561,8 +402,8 @@ export default class WaveSurfer extends util.Observer {
         const observerPrototypeKeys = Object.getOwnPropertyNames(
             util.Observer.prototype
         );
-        observerPrototypeKeys.forEach(key => {
-            Instance.prototype[key] = util.Observer.prototype[key];
+        observerPrototypeKeys.forEach((key) => {
+            Instance[key] = util.Observer.prototype[key];
         });
 
         /**
@@ -570,20 +411,17 @@ export default class WaveSurfer extends util.Observer {
          * instance
          * @type {Object}
          */
-        this[plugin.name] = new Instance(plugin.params || {}, this);
-        this.fireEvent('plugin-added', plugin.name);
+        this[plugin.name] = new PluginClass(plugin.params || {}, this);
+        this.fireEvent("plugin-added", plugin.name);
         return this;
     }
 
     /**
      * Initialise a plugin
      *
-     * @param {string} name A plugin name
-     * @emits WaveSurfer#plugin-initialised
      * @example wavesurfer.initPlugin('minimap');
-     * @return {this} The wavesurfer instance
      */
-    initPlugin(name) {
+    initPlugin(name: string): WaveSurfer {
         if (!this[name]) {
             throw new Error(`Plugin ${name} has not been added yet!`);
         }
@@ -593,19 +431,16 @@ export default class WaveSurfer extends util.Observer {
         }
         this[name].init();
         this.initialisedPluginList[name] = true;
-        this.fireEvent('plugin-initialised', name);
+        this.fireEvent("plugin-initialised", name);
         return this;
     }
 
     /**
      * Destroy a plugin
      *
-     * @param {string} name A plugin name
-     * @emits WaveSurfer#plugin-destroyed
      * @example wavesurfer.destroyPlugin('minimap');
-     * @returns {this} The wavesurfer instance
      */
-    destroyPlugin(name) {
+    destroyPlugin(name: string): WaveSurfer {
         if (!this[name]) {
             throw new Error(
                 `Plugin ${name} has not been added yet and cannot be destroyed!`
@@ -616,117 +451,96 @@ export default class WaveSurfer extends util.Observer {
                 `Plugin ${name} is not active and cannot be destroyed!`
             );
         }
-        if (typeof this[name].destroy !== 'function') {
+        if (typeof this[name].destroy !== "function") {
             throw new Error(`Plugin ${name} does not have a destroy function!`);
         }
 
         this[name].destroy();
         delete this.initialisedPluginList[name];
-        this.fireEvent('plugin-destroyed', name);
+        this.fireEvent("plugin-destroyed", name);
         return this;
     }
 
-    /**
-     * Destroy all initialised plugins. Convenience function to use when
-     * wavesurfer is removed
-     *
-     * @private
-     */
-    destroyAllPlugins() {
-        Object.keys(this.initialisedPluginList).forEach(name =>
+    private destroyAllPlugins() {
+        Object.keys(this.initialisedPluginList).forEach((name) =>
             this.destroyPlugin(name)
         );
     }
 
-    /**
-     * Create the drawer and draw the waveform
-     *
-     * @private
-     * @emits WaveSurfer#drawer-created
-     */
-    createDrawer() {
+    // #endregion Plugins
+
+    private createDrawer() {
         this.drawer = new this.Drawer(this.container, this.params);
         this.drawer.init();
-        this.fireEvent('drawer-created', this.drawer);
+        this.fireEvent("drawer-created", this.drawer);
 
         if (this.params.responsive !== false) {
-            window.addEventListener('resize', this._onResize, true);
-            window.addEventListener('orientationchange', this._onResize, true);
+            window.addEventListener("resize", this._onResize, true);
+            window.addEventListener("orientationchange", this._onResize, true);
         }
 
-        this.drawer.on('redraw', () => {
+        this.drawer.on("redraw", () => {
             this.drawBuffer();
             this.drawer.progress(this.backend.getPlayedPercents());
         });
 
         // Click-to-seek
-        this.drawer.on('click', (e, progress) => {
+        this.drawer.on("click", (e: Event, progress: number) => {
             setTimeout(() => this.seekTo(progress), 0);
         });
 
         // Relay the scroll event from the drawer
-        this.drawer.on('scroll', e => {
+        this.drawer.on("scroll", (e) => {
             if (this.params.partialRender) {
                 this.drawBuffer();
             }
-            this.fireEvent('scroll', e);
+            this.fireEvent("scroll", e);
         });
     }
 
-    /**
-     * Create the backend
-     *
-     * @private
-     * @emits WaveSurfer#backend-created
-     */
-    createBackend() {
+    private createBackend() {
         if (this.backend) {
             this.backend.destroy();
         }
 
         this.backend = new this.Backend(this.params);
         this.backend.init();
-        this.fireEvent('backend-created', this.backend);
+        this.fireEvent("backend-created", this.backend);
 
-        this.backend.on('finish', () => {
+        this.backend.on("finish", () => {
             this.drawer.progress(this.backend.getPlayedPercents());
-            this.fireEvent('finish');
+            this.fireEvent("finish");
         });
-        this.backend.on('play', () => this.fireEvent('play'));
-        this.backend.on('pause', () => this.fireEvent('pause'));
+        this.backend.on("play", () => this.fireEvent("play"));
+        this.backend.on("pause", () => this.fireEvent("pause"));
 
-        this.backend.on('audioprocess', time => {
+        this.backend.on("audioprocess", (time: number) => {
             this.drawer.progress(this.backend.getPlayedPercents());
-            this.fireEvent('audioprocess', time);
+            this.fireEvent("audioprocess", time);
         });
 
         // only needed for MediaElement and MediaElementWebAudio backend
         if (
-            this.params.backend === 'MediaElement' ||
-            this.params.backend === 'MediaElementWebAudio'
+            this.params.backend === "MediaElement" ||
+            this.params.backend === "MediaElementWebAudio"
         ) {
-            this.backend.on('seek', () => {
+            this.backend.on("seek", () => {
                 this.drawer.progress(this.backend.getPlayedPercents());
             });
 
-            this.backend.on('volume', () => {
-                let newVolume = this.getVolume();
-                this.fireEvent('volume', newVolume);
+            this.backend.on("volume", () => {
+                const newVolume = this.getVolume();
+                this.fireEvent("volume", newVolume);
 
                 if (this.backend.isMuted !== this.isMuted) {
                     this.isMuted = this.backend.isMuted;
-                    this.fireEvent('mute', this.isMuted);
+                    this.fireEvent("mute", this.isMuted);
                 }
             });
         }
     }
 
-    /**
-     * Create the peak cache
-     *
-     * @private
-     */
-    createPeakCache() {
+    private createPeakCache() {
         if (this.params.partialRender) {
             this.peakCache = new PeakCache();
         }
@@ -736,9 +550,8 @@ export default class WaveSurfer extends util.Observer {
      * Get the duration of the audio clip
      *
      * @example const duration = wavesurfer.getDuration();
-     * @return {number} Duration in seconds
      */
-    getDuration() {
+    public getDuration(): number {
         return this.backend.getDuration();
     }
 
@@ -746,19 +559,12 @@ export default class WaveSurfer extends util.Observer {
      * Get the current playback position
      *
      * @example const currentTime = wavesurfer.getCurrentTime();
-     * @return {number} Playback position in seconds
      */
-    getCurrentTime() {
+    public getCurrentTime(): number {
         return this.backend.getCurrentTime();
     }
 
-    /**
-     * Set the current play time in seconds.
-     *
-     * @param {number} seconds A positive number in seconds. E.g. 10 means 10
-     * seconds, 60 means 1 minute
-     */
-    setCurrentTime(seconds) {
+    public setCurrentTime(seconds: number) {
         if (seconds >= this.getDuration()) {
             this.seekTo(1);
         } else {
@@ -770,26 +576,20 @@ export default class WaveSurfer extends util.Observer {
      * Starts playback from the current position. Optional start and end
      * measured in seconds can be used to set the range of audio to play.
      *
-     * @param {?number} start Position to start at
-     * @param {?number} end Position to end at
-     * @emits WaveSurfer#interaction
-     * @return {Promise} Result of the backend play method
      * @example
      * // play from second 1 to 5
      * wavesurfer.play(1, 5);
      */
-    play(start, end) {
-        this.fireEvent('interaction', () => this.play(start, end));
+    public play(start?: number, end?: number): Promise<any> {
+        this.fireEvent("interaction", () => this.play(start, end));
         return this.backend.play(start, end);
     }
 
     /**
      * Set a point in seconds for playback to stop at.
-     *
-     * @param {number} position Position (in seconds) to stop at
      * @version 3.3.0
      */
-    setPlayEnd(position) {
+    public setPlayEnd(position: number) {
         this.backend.setPlayEnd(position);
     }
 
@@ -797,12 +597,12 @@ export default class WaveSurfer extends util.Observer {
      * Stops and pauses playback
      *
      * @example wavesurfer.pause();
-     * @return {Promise} Result of the backend pause method
      */
-    pause() {
+    public pause(): Promise<any> {
         if (!this.backend.isPaused()) {
             return this.backend.pause();
         }
+        return new Promise((res) => res);
     }
 
     /**
@@ -811,7 +611,7 @@ export default class WaveSurfer extends util.Observer {
      * @example wavesurfer.playPause();
      * @return {Promise} Result of the backend play or pause method
      */
-    playPause() {
+    public playPause(): Promise<any> {
         return this.backend.isPaused() ? this.play() : this.pause();
     }
 
@@ -819,44 +619,38 @@ export default class WaveSurfer extends util.Observer {
      * Get the current playback state
      *
      * @example const isPlaying = wavesurfer.isPlaying();
-     * @return {boolean} False if paused, true if playing
      */
-    isPlaying() {
+    public isPlaying(): boolean {
         return !this.backend.isPaused();
     }
 
     /**
      * Skip backward
      *
-     * @param {?number} seconds Amount to skip back, if not specified `skipLength`
-     * is used
      * @example wavesurfer.skipBackward();
      */
-    skipBackward(seconds) {
-        this.skip(-seconds || -this.params.skipLength);
+    public skipBackward(seconds?: number) {
+        this.skip(-(seconds || this.params.skipLength || 0));
     }
 
     /**
      * Skip forward
      *
-     * @param {?number} seconds Amount to skip back, if not specified `skipLength`
-     * is used
      * @example wavesurfer.skipForward();
      */
-    skipForward(seconds) {
-        this.skip(seconds || this.params.skipLength);
+    public skipForward(seconds?: number) {
+        this.skip(seconds || this.params.skipLength || 0);
     }
 
     /**
      * Skip a number of seconds from the current position (use a negative value
      * to go backwards).
      *
-     * @param {number} offset Amount to skip back or forwards
      * @example
      * // go back 2 seconds
      * wavesurfer.skip(-2);
      */
-    skip(offset) {
+    public skip(offset: number) {
         const duration = this.getDuration() || 1;
         let position = this.getCurrentTime() || 0;
         position = Math.max(0, Math.min(duration, position + (offset || 0)));
@@ -866,12 +660,11 @@ export default class WaveSurfer extends util.Observer {
     /**
      * Seeks to a position and centers the view
      *
-     * @param {number} progress Between 0 (=beginning) and 1 (=end)
      * @example
      * // seek and go to the middle of the audio
      * wavesurfer.seekTo(0.5);
      */
-    seekAndCenter(progress) {
+    public seekAndCenter(progress: number) {
         this.seekTo(progress);
         this.drawer.recenter(progress);
     }
@@ -886,19 +679,14 @@ export default class WaveSurfer extends util.Observer {
      * // seek to the middle of the audio
      * wavesurfer.seekTo(0.5);
      */
-    seekTo(progress) {
+    public seekTo(progress: number) {
         // return an error if progress is not a number between 0 and 1
-        if (
-            typeof progress !== 'number' ||
-            !isFinite(progress) ||
-            progress < 0 ||
-            progress > 1
-        ) {
+        if (!isFinite(progress) || progress < 0 || progress > 1) {
             throw new Error(
-                'Error calling wavesurfer.seekTo, parameter must be a number between 0 and 1!'
+                "Error calling wavesurfer.seekTo, parameter must be a number between 0 and 1!"
             );
         }
-        this.fireEvent('interaction', () => this.seekTo(progress));
+        this.fireEvent("interaction", () => this.seekTo(progress));
 
         const paused = this.backend.isPaused();
         // avoid draw wrong position while playing backward seeking
@@ -915,7 +703,7 @@ export default class WaveSurfer extends util.Observer {
             this.backend.play();
         }
         this.params.scrollParent = oldScrollParent;
-        this.fireEvent('seek', progress);
+        this.fireEvent("seek", progress);
     }
 
     /**
@@ -923,75 +711,37 @@ export default class WaveSurfer extends util.Observer {
      *
      * @example wavesurfer.stop();
      */
-    stop() {
+    public stop() {
         this.pause();
         this.seekTo(0);
         this.drawer.progress(0);
     }
 
     /**
-     * Sets the ID of the audio device to use for output and returns a Promise.
-     *
-     * @param {string} deviceId String value representing underlying output
-     * device
-     * @returns {Promise} `Promise` that resolves to `undefined` when there are
-     * no errors detected.
+     * Sets the ID of the audio device to use for output and returns a Promise
      */
-    setSinkId(deviceId) {
+    public setSinkId(deviceId: string): Promise<any> {
         return this.backend.setSinkId(deviceId);
     }
 
-    /**
-     * Set the playback volume.
-     *
-     * @param {number} newVolume A value between 0 and 1, 0 being no
-     * volume and 1 being full volume.
-     * @emits WaveSurfer#volume
-     */
-    setVolume(newVolume) {
+    public setVolume(newVolume: number) {
         this.backend.setVolume(newVolume);
-        this.fireEvent('volume', newVolume);
+        this.fireEvent("volume", newVolume);
     }
 
-    /**
-     * Get the playback volume.
-     *
-     * @return {number} A value between 0 and 1, 0 being no
-     * volume and 1 being full volume.
-     */
-    getVolume() {
+    public getVolume(): number {
         return this.backend.getVolume();
     }
 
-    /**
-     * Set the playback rate.
-     *
-     * @param {number} rate A positive number. E.g. 0.5 means half the normal
-     * speed, 2 means double speed and so on.
-     * @example wavesurfer.setPlaybackRate(2);
-     */
-    setPlaybackRate(rate) {
+    public setPlaybackRate(rate: number) {
         this.backend.setPlaybackRate(rate);
     }
 
-    /**
-     * Get the playback rate.
-     *
-     * @return {number} The current playback rate.
-     */
-    getPlaybackRate() {
+    public getPlaybackRate(): number {
         return this.backend.getPlaybackRate();
     }
 
-    /**
-     * Toggle the volume on and off. If not currently muted it will save the
-     * current volume value and turn the volume off. If currently muted then it
-     * will restore the volume to the saved value, and then rest the saved
-     * value.
-     *
-     * @example wavesurfer.toggleMute();
-     */
-    toggleMute() {
+    public toggleMute() {
         this.setMute(!this.isMuted);
     }
 
@@ -1006,10 +756,10 @@ export default class WaveSurfer extends util.Observer {
      * wavesurfer.setMute(false);
      * console.log(wavesurfer.getMute()) // logs false
      */
-    setMute(mute) {
+    public setMute(mute: boolean) {
         // ignore all muting requests if the audio is already in that state
         if (mute === this.isMuted) {
-            this.fireEvent('mute', this.isMuted);
+            this.fireEvent("mute", this.isMuted);
             return;
         }
 
@@ -1019,35 +769,31 @@ export default class WaveSurfer extends util.Observer {
             this.savedVolume = this.backend.getVolume();
             this.backend.setVolume(0);
             this.isMuted = true;
-            this.fireEvent('volume', 0);
+            this.fireEvent("volume", 0);
         } else {
             // If currently muted then restore to the saved volume
             // and update the mute properties
             this.backend.setVolume(this.savedVolume);
             this.isMuted = false;
-            this.fireEvent('volume', this.savedVolume);
+            this.fireEvent("volume", this.savedVolume);
         }
-        this.fireEvent('mute', this.isMuted);
+        this.fireEvent("mute", this.isMuted);
     }
 
     /**
      * Get the current mute status.
      *
      * @example const isMuted = wavesurfer.getMute();
-     * @return {boolean} Current mute status
      */
-    getMute() {
+    public getMute(): boolean {
         return this.isMuted;
     }
 
     /**
      * Get the list of current set filters as an array.
-     *
      * Filters must be set with setFilters method first
-     *
-     * @return {array} List of enabled filters
      */
-    getFilters() {
+    public getFilters(): any[] {
         return this.backend.filters || [];
     }
 
@@ -1056,7 +802,7 @@ export default class WaveSurfer extends util.Observer {
      *
      * @example wavesurfer.toggleScroll();
      */
-    toggleScroll() {
+    public toggleScroll() {
         this.params.scrollParent = !this.params.scrollParent;
         this.drawBuffer();
     }
@@ -1066,26 +812,23 @@ export default class WaveSurfer extends util.Observer {
      *
      * @example wavesurfer.toggleInteraction();
      */
-    toggleInteraction() {
+    public toggleInteraction() {
         this.params.interact = !this.params.interact;
     }
 
     /**
      * Get the fill color of the waveform after the cursor.
-     *
-     * @return {string} A CSS color string.
      */
-    getWaveColor() {
-        return this.params.waveColor;
+    public getWaveColor(): string {
+        return this.params.waveColor || "";
     }
 
     /**
      * Set the fill color of the waveform after the cursor.
      *
-     * @param {string} color A CSS color string.
      * @example wavesurfer.setWaveColor('#ddd');
      */
-    setWaveColor(color) {
+    public setWaveColor(color: string) {
         this.params.waveColor = color;
         this.drawBuffer();
     }
@@ -1095,113 +838,105 @@ export default class WaveSurfer extends util.Observer {
      *
      * @return {string} A CSS color string.
      */
-    getProgressColor() {
-        return this.params.progressColor;
+    public getProgressColor(): string {
+        return this.params.progressColor || "";
     }
 
     /**
      * Set the fill color of the waveform behind the cursor.
      *
-     * @param {string} color A CSS color string.
      * @example wavesurfer.setProgressColor('#400');
      */
-    setProgressColor(color) {
+    public setProgressColor(color: string) {
         this.params.progressColor = color;
         this.drawBuffer();
     }
 
     /**
      * Get the background color of the waveform container.
-     *
-     * @return {string} A CSS color string.
      */
-    getBackgroundColor() {
-        return this.params.backgroundColor;
+    public getBackgroundColor(): string {
+        return this.params.backgroundColor || "";
     }
 
     /**
      * Set the background color of the waveform container.
      *
-     * @param {string} color A CSS color string.
      * @example wavesurfer.setBackgroundColor('#FF00FF');
      */
-    setBackgroundColor(color) {
+    public setBackgroundColor(color: string) {
         this.params.backgroundColor = color;
-        util.style(this.container, { background: this.params.backgroundColor });
+        if (this.container) {
+            util.style(this.container, {
+                background: this.params.backgroundColor,
+            });
+        }
     }
 
     /**
      * Get the fill color of the cursor indicating the playhead
      * position.
-     *
-     * @return {string} A CSS color string.
      */
-    getCursorColor() {
-        return this.params.cursorColor;
+    public getCursorColor(): string {
+        return this.params.cursorColor || "";
     }
 
     /**
      * Set the fill color of the cursor indicating the playhead
      * position.
      *
-     * @param {string} color A CSS color string.
      * @example wavesurfer.setCursorColor('#222');
      */
-    setCursorColor(color) {
+    public setCursorColor(color: string) {
         this.params.cursorColor = color;
         this.drawer.updateCursor();
     }
 
     /**
      * Get the height of the waveform.
-     *
-     * @return {number} Height measured in pixels.
      */
-    getHeight() {
-        return this.params.height;
+    public getHeight(): number {
+        return this.params.height || 0;
     }
 
     /**
      * Set the height of the waveform.
      *
-     * @param {number} height Height measured in pixels.
      * @example wavesurfer.setHeight(200);
      */
-    setHeight(height) {
+    public setHeight(height: number) {
         this.params.height = height;
-        this.drawer.setHeight(height * this.params.pixelRatio);
+        this.drawer.setHeight(height * (this.params.pixelRatio ?? 1));
         this.drawBuffer();
     }
 
     /**
      * Hide channels from being drawn on the waveform if splitting channels.
-     * 
-     * For example, if we want to draw only the peaks for the right stereo channel:
      *
+     * @example
      * const wavesurfer = new WaveSurfer.create({...splitChannels: true});
      * wavesurfer.load('stereo_audio.mp3');
-     * 
+     *
      * wavesurfer.setFilteredChannel([0]); <-- hide left channel peaks.
      *
      * @param {array} channelIndices Channels to be filtered out from drawing.
      * @version 4.0.0
      */
-    setFilteredChannels(channelIndices) {
-        this.params.splitChannelsOptions.filterChannels = channelIndices;
+    public setFilteredChannels(channelIndices: any[]) {
+        if (this.params.splitChannelsOptions) {
+            this.params.splitChannelsOptions.filterChannels = channelIndices;
+        }
         this.drawBuffer();
     }
 
     /**
      * Get the correct peaks for current wave view-port and render wave
-     *
-     * @private
-     * @emits WaveSurfer#redraw
      */
-    drawBuffer() {
+    private drawBuffer() {
         const nominalWidth = Math.round(
             this.getDuration() *
-                this.params.minPxPerSec *
-                this.params.pixelRatio
+                (this.params.minPxPerSec ?? 1) *
+                (this.params.pixelRatio ?? 1)
         );
         const parentWidth = this.drawer.getWidth();
         let width = nominalWidth;
@@ -1225,8 +960,7 @@ export default class WaveSurfer extends util.Observer {
                 start,
                 end
             );
-            let i;
-            for (i = 0; i < newRanges.length; i++) {
+            for (let i = 0; i < newRanges.length; i++) {
                 peaks = this.backend.getPeaks(
                     width,
                     newRanges[i][0],
@@ -1243,7 +977,7 @@ export default class WaveSurfer extends util.Observer {
             peaks = this.backend.getPeaks(width, start, end);
             this.drawer.drawPeaks(peaks, width, start, end);
         }
-        this.fireEvent('redraw', peaks, width);
+        this.fireEvent("redraw", peaks, width);
     }
 
     /**
@@ -1253,10 +987,9 @@ export default class WaveSurfer extends util.Observer {
      *
      * @param {?number} pxPerSec Number of horizontal pixels per second of
      * audio, if none is set the waveform returns to unzoomed state
-     * @emits WaveSurfer#zoom
      * @example wavesurfer.zoom(20);
      */
-    zoom(pxPerSec) {
+    public zoom(pxPerSec?: number) {
         if (!pxPerSec) {
             this.params.minPxPerSec = this.defaultParams.minPxPerSec;
             this.params.scrollParent = false;
@@ -1269,17 +1002,14 @@ export default class WaveSurfer extends util.Observer {
         this.drawer.progress(this.backend.getPlayedPercents());
 
         this.drawer.recenter(this.getCurrentTime() / this.getDuration());
-        this.fireEvent('zoom', pxPerSec);
+        this.fireEvent("zoom", pxPerSec);
     }
 
     /**
      * Decode buffer and load
-     *
-     * @private
-     * @param {ArrayBuffer} arraybuffer Buffer to process
      */
-    loadArrayBuffer(arraybuffer) {
-        this.decodeArrayBuffer(arraybuffer, data => {
+    private loadArrayBuffer(arraybuffer: ArrayBuffer) {
+        this.decodeArrayBuffer(arraybuffer, (data: AudioBuffer) => {
             if (!this.isDestroyed) {
                 this.loadDecodedBuffer(data);
             }
@@ -1288,33 +1018,30 @@ export default class WaveSurfer extends util.Observer {
 
     /**
      * Directly load an externally decoded AudioBuffer
-     *
-     * @private
-     * @param {AudioBuffer} buffer Buffer to process
-     * @emits WaveSurfer#ready
      */
-    loadDecodedBuffer(buffer) {
+    private loadDecodedBuffer(buffer: AudioBuffer) {
         this.backend.load(buffer);
         this.drawBuffer();
         this.isReady = true;
-        this.fireEvent('ready');
+        this.fireEvent("ready");
     }
 
     /**
      * Loads audio data from a Blob or File object
-     *
-     * @param {Blob|File} blob Audio data
-     * @example
      */
-    loadBlob(blob) {
+    public loadBlob(blob: Blob | File) {
         // Create file reader
         const reader = new FileReader();
-        reader.addEventListener('progress', e => this.onProgress(e));
-        reader.addEventListener('load', e =>
-            this.loadArrayBuffer(e.target.result)
+        reader.addEventListener("progress", (e: ProgressEvent<FileReader>) =>
+            this.onProgress(e)
         );
-        reader.addEventListener('error', () =>
-            this.fireEvent('error', 'Error reading file')
+        reader.addEventListener("load", (e: ProgressEvent<FileReader>) => {
+            if (e.target && e.target.result != null) {
+                this.loadArrayBuffer(e.target.result as ArrayBuffer);
+            }
+        });
+        reader.addEventListener("error", () =>
+            this.fireEvent("error", "Error reading file")
         );
         reader.readAsArrayBuffer(blob);
         this.empty();
@@ -1333,8 +1060,6 @@ export default class WaveSurfer extends util.Observer {
      * render the peaks data in the correct size for the audio duration (as
      * befits the current `minPxPerSec` and zoom value) without having to decode
      * the audio.
-     * @returns {void}
-     * @throws Will throw an error if the `url` argument is empty.
      * @example
      * // uses fetch or media element to load file (depending on backend)
      * wavesurfer.load('http://example.com/demo.wav');
@@ -1347,68 +1072,73 @@ export default class WaveSurfer extends util.Observer {
      *   true
      * );
      */
-    load(url, peaks, preload, duration) {
-        if (!url) {
-            throw new Error('url parameter cannot be empty');
+    public load(
+        url: string | HTMLMediaElement,
+        peaks?: number[],
+        preload?: string,
+        duration?: number
+    ) {
+        if (url === "") {
+            throw new Error("url parameter cannot be empty");
         }
         this.empty();
-        if (preload) {
+        if (preload && preload !== "") {
             // check whether the preload attribute will be usable and if not log
             // a warning listing the reasons why not and nullify the variable
             const preloadIgnoreReasons = {
                 "Preload is not 'auto', 'none' or 'metadata'":
-                    ['auto', 'metadata', 'none'].indexOf(preload) === -1,
-                'Peaks are not provided': !peaks,
+                    ["auto", "metadata", "none"].indexOf(preload) === -1,
+                "Peaks are not provided": !peaks,
                 "Backend is not of type 'MediaElement' or 'MediaElementWebAudio'":
-                    ['MediaElement', 'MediaElementWebAudio'].indexOf(
+                    ["MediaElement", "MediaElementWebAudio"].indexOf(
                         this.params.backend
                     ) === -1,
-                'Url is not of type string': typeof url !== 'string'
+                "Url is not of type string": typeof url !== "string",
             };
             const activeReasons = Object.keys(preloadIgnoreReasons).filter(
-                reason => preloadIgnoreReasons[reason]
+                (reason) => preloadIgnoreReasons[reason]
             );
             if (activeReasons.length) {
                 // eslint-disable-next-line no-console
                 console.warn(
-                    'Preload parameter of wavesurfer.load will be ignored because:\n\t- ' +
-                        activeReasons.join('\n\t- ')
+                    `Preload parameter of wavesurfer.load will be ignored because:\n\t-
+                        ${activeReasons.join("\n\t- ")}`
                 );
                 // stop invalid values from being used
-                preload = null;
+                preload = "";
             }
         }
 
         switch (this.params.backend) {
-            case 'WebAudio':
+            case "WebAudio":
                 return this.loadBuffer(url, peaks, duration);
-            case 'MediaElement':
-            case 'MediaElementWebAudio':
+            case "MediaElement":
+            case "MediaElementWebAudio":
                 return this.loadMediaElement(url, peaks, preload, duration);
         }
     }
 
     /**
      * Loads audio using Web Audio buffer backend.
-     *
-     * @private
-     * @param {string} url URL of audio file
-     * @param {number[]|Number.<Array[]>} peaks Peaks data
-     * @param {?number} duration Optional duration of audio file
-     * @returns {void}
      */
-    loadBuffer(url, peaks, duration) {
-        const load = action => {
+    private loadBuffer(
+        url: string | HTMLElement,
+        peaks?: number[],
+        duration?: number
+    ) {
+        const load = (action?: () => void) => {
             if (action) {
-                this.tmpEvents.push(this.once('ready', action));
+                this.tmpEvents.push(this.once("ready", action));
             }
-            return this.getArrayBuffer(url, data => this.loadArrayBuffer(data));
+            return this.getArrayBuffer(url, (data: ArrayBuffer) =>
+                this.loadArrayBuffer(data)
+            );
         };
 
-        if (peaks) {
+        if (peaks && peaks.length) {
             this.backend.setPeaks(peaks, duration);
             this.drawBuffer();
-            this.tmpEvents.push(this.once('interaction', load));
+            this.tmpEvents.push(this.once("interaction", load));
         } else {
             return load();
         }
@@ -1417,7 +1147,6 @@ export default class WaveSurfer extends util.Observer {
     /**
      * Either create a media element, or load an existing media element.
      *
-     * @private
      * @param {string|HTMLMediaElement} urlOrElt Either a path to a media file, or an
      * existing HTML5 Audio/Video Element
      * @param {number[]|Number.<Array[]>} peaks Array of peaks. Required to bypass web audio
@@ -1426,10 +1155,16 @@ export default class WaveSurfer extends util.Observer {
      * audio element should be enabled
      * @param {?number} duration Optional duration of audio file
      */
-    loadMediaElement(urlOrElt, peaks, preload, duration) {
-        let url = urlOrElt;
+    private loadMediaElement(
+        urlOrElt: string | HTMLMediaElement,
+        peaks?: number[],
+        preload?: string,
+        duration?: number
+    ) {
+        let url: string;
 
-        if (typeof urlOrElt === 'string') {
+        if (typeof urlOrElt === "string") {
+            url = urlOrElt;
             this.backend.load(url, this.mediaContainer, peaks, preload);
         } else {
             const elt = urlOrElt;
@@ -1441,15 +1176,17 @@ export default class WaveSurfer extends util.Observer {
         }
 
         this.tmpEvents.push(
-            this.backend.once('canplay', () => {
+            this.backend.once("canplay", () => {
                 // ignore when backend was already destroyed
                 if (!this.backend.destroyed) {
                     this.drawBuffer();
                     this.isReady = true;
-                    this.fireEvent('ready');
+                    this.fireEvent("ready");
                 }
             }),
-            this.backend.once('error', err => this.fireEvent('error', err))
+            this.backend.once("error", (err: Error) =>
+                this.fireEvent("error", err)
+            )
         );
 
         // If no pre-decoded peaks provided or pre-decoded peaks are
@@ -1463,12 +1200,12 @@ export default class WaveSurfer extends util.Observer {
             (!peaks || this.params.forceDecode) &&
             this.backend.supportsWebAudio()
         ) {
-            this.getArrayBuffer(url, arraybuffer => {
-                this.decodeArrayBuffer(arraybuffer, buffer => {
+            this.getArrayBuffer(url, (arraybuffer) => {
+                this.decodeArrayBuffer(arraybuffer, (buffer) => {
                     this.backend.buffer = buffer;
                     this.backend.setPeaks(null);
                     this.drawBuffer();
-                    this.fireEvent('waveform-ready');
+                    this.fireEvent("waveform-ready");
                 });
             });
         }
@@ -1477,23 +1214,26 @@ export default class WaveSurfer extends util.Observer {
     /**
      * Decode an array buffer and pass data to a callback
      *
-     * @private
      * @param {Object} arraybuffer The array buffer to decode
      * @param {function} callback The function to call on complete
      */
-    decodeArrayBuffer(arraybuffer, callback) {
+    private decodeArrayBuffer(
+        arraybuffer: ArrayBuffer,
+        callback: (data?: any) => void
+    ) {
         this.arraybuffer = arraybuffer;
         this.backend.decodeArrayBuffer(
             arraybuffer,
-            data => {
+            // TODO: Determine type for data returned
+            (data) => {
                 // Only use the decoded data if we haven't been destroyed or
                 // another decode started in the meantime
-                if (!this.isDestroyed && this.arraybuffer == arraybuffer) {
+                if (!this.isDestroyed && this.arraybuffer === arraybuffer) {
                     callback(data);
                     this.arraybuffer = null;
                 }
             },
-            () => this.fireEvent('error', 'Error decoding audiobuffer')
+            () => this.fireEvent("error", "Error decoding audiobuffer")
         );
     }
 
@@ -1502,14 +1242,15 @@ export default class WaveSurfer extends util.Observer {
      *
      * @param {string} url The URL of the file object
      * @param {function} callback The function to call on complete
-     * @returns {util.fetchFile} fetch call
-     * @private
      */
-    getArrayBuffer(url, callback) {
-        let options = Object.assign(
+    private getArrayBuffer(
+        url: string | HTMLElement,
+        callback: (data?: any) => void
+    ): util.Observer {
+        const options = Object.assign(
             {
                 url: url,
-                responseType: 'arraybuffer'
+                responseType: "arraybuffer",
             },
             this.params.xhr
         );
@@ -1518,15 +1259,16 @@ export default class WaveSurfer extends util.Observer {
         this.currentRequest = request;
 
         this.tmpEvents.push(
-            request.on('progress', e => {
+            request.on("progress", (e: ProgressEvent) => {
                 this.onProgress(e);
             }),
-            request.on('success', data => {
+            // TODO: Determine type of data
+            request.on("success", (data) => {
                 callback(data);
                 this.currentRequest = null;
             }),
-            request.on('error', e => {
-                this.fireEvent('error', e);
+            request.on("error", (e: ErrorEvent) => {
+                this.fireEvent("error", e);
                 this.currentRequest = null;
             })
         );
@@ -1537,11 +1279,8 @@ export default class WaveSurfer extends util.Observer {
     /**
      * Called while the audio file is loading
      *
-     * @private
-     * @param {Event} e Progress event
-     * @emits WaveSurfer#loading
      */
-    onProgress(e) {
+    private onProgress(e: ProgressEvent<any>) {
         let percentComplete;
         if (e.lengthComputable) {
             percentComplete = e.loaded / e.total;
@@ -1550,7 +1289,7 @@ export default class WaveSurfer extends util.Observer {
             // function, and assume downloads in the 1-3 MB range.
             percentComplete = e.loaded / (e.loaded + 1000000);
         }
-        this.fireEvent('loading', Math.round(percentComplete * 100), e.target);
+        this.fireEvent("loading", Math.round(percentComplete * 100), e.target);
     }
 
     /**
@@ -1562,9 +1301,14 @@ export default class WaveSurfer extends util.Observer {
      * window with the JSON
      * @param {number} start Start index
      * @param {number} end End index
-     * @return {Promise} Promise that resolves with array of peaks
      */
-    exportPCM(length, accuracy, noWindow, start, end) {
+    public exportPCM(
+        length: number,
+        accuracy: number,
+        noWindow?: boolean,
+        start?: number,
+        end?: number
+    ): Promise<string> {
         length = length || 1024;
         start = start || 0;
         accuracy = accuracy || 10000;
@@ -1572,14 +1316,14 @@ export default class WaveSurfer extends util.Observer {
         const peaks = this.backend.getPeaks(length, start, end);
         const arr = [].map.call(
             peaks,
-            val => Math.round(val * accuracy) / accuracy
+            (val) => Math.round(val * accuracy) / accuracy
         );
         return new Promise((resolve, reject) => {
             const json = JSON.stringify(arr);
 
             if (!noWindow) {
                 window.open(
-                    'data:application/json;charset=utf-8,' +
+                    "data:application/json;charset=utf-8," +
                         encodeURIComponent(json)
                 );
             }
@@ -1605,15 +1349,19 @@ export default class WaveSurfer extends util.Observer {
      * `'blob'` type this returns a `Promise` resolving with an array of `Blob`
      * instances, one for each canvas.
      */
-    exportImage(format, quality, type) {
+    public exportImage(
+        format: string,
+        quality: number,
+        type: "dataURL" | "blob"
+    ): string | string[] | Promise<string | string[]> {
         if (!format) {
-            format = 'image/png';
+            format = "image/png";
         }
         if (!quality) {
             quality = 1;
         }
         if (!type) {
-            type = 'dataURL';
+            type = "dataURL";
         }
 
         return this.drawer.getImage(format, quality, type);
@@ -1622,24 +1370,21 @@ export default class WaveSurfer extends util.Observer {
     /**
      * Cancel any fetch request currently in progress
      */
-    cancelAjax() {
+    public cancelAjax() {
         if (this.currentRequest && this.currentRequest.controller) {
             this.currentRequest.controller.abort();
             this.currentRequest = null;
         }
     }
 
-    /**
-     * @private
-     */
-    clearTmpEvents() {
-        this.tmpEvents.forEach(e => e.un());
+    private clearTmpEvents() {
+        this.tmpEvents.forEach((e) => e.un());
     }
 
     /**
      * Display empty waveform.
      */
-    empty() {
+    public empty() {
         if (!this.backend.isPaused()) {
             this.stop();
             this.backend.disconnectSource();
@@ -1659,16 +1404,16 @@ export default class WaveSurfer extends util.Observer {
      *
      * @emits WaveSurfer#destroy
      */
-    destroy() {
+    public destroy() {
         this.destroyAllPlugins();
-        this.fireEvent('destroy');
+        this.fireEvent("destroy");
         this.cancelAjax();
         this.clearTmpEvents();
         this.unAll();
         if (this.params.responsive !== false) {
-            window.removeEventListener('resize', this._onResize, true);
+            window.removeEventListener("resize", this._onResize, true);
             window.removeEventListener(
-                'orientationchange',
+                "orientationchange",
                 this._onResize,
                 true
             );

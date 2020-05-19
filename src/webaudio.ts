@@ -1,24 +1,20 @@
-import * as util from './util';
+import * as util from "./util";
 
 // using constants to prevent someone writing the string wrong
-const PLAYING = 'playing';
-const PAUSED = 'paused';
-const FINISHED = 'finished';
+const PLAYING = "playing";
+const PAUSED = "paused";
+const FINISHED = "finished";
 
-/**
- * WebAudio backend
- *
- * @extends {Observer}
- */
 export default class WebAudio extends util.Observer {
+    scriptBufferSize: number;
+    audioContext: null | "WebAudio";
+
     /** scriptBufferSize: size of the processing buffer */
     static scriptBufferSize = 256;
     /** audioContext: allows to process audio with WebAudio API */
     audioContext = null;
-    /** @private */
-    offlineAudioContext = null;
-    /** @private */
-    stateBehaviors = {
+    private offlineAudioContext = null;
+    private stateBehaviors = {
         [PLAYING]: {
             init() {
                 this.addOnAudioProcess();
@@ -29,7 +25,7 @@ export default class WebAudio extends util.Observer {
             },
             getCurrentTime() {
                 return this.startPosition + this.getPlayedTime();
-            }
+            },
         },
         [PAUSED]: {
             init() {
@@ -41,21 +37,77 @@ export default class WebAudio extends util.Observer {
             },
             getCurrentTime() {
                 return this.startPosition;
-            }
+            },
         },
         [FINISHED]: {
             init() {
                 this.removeOnAudioProcess();
-                this.fireEvent('finish');
+                this.fireEvent("finish");
             },
             getPlayedPercents() {
                 return 1;
             },
             getCurrentTime() {
                 return this.getDuration();
-            }
-        }
+            },
+        },
     };
+    /**
+     * Construct the backend
+     *
+     * @param {WavesurferParams} params Wavesurfer parameters
+     */
+    constructor(params: WavesurferParams) {
+        super();
+        /** @private */
+        this.params = params;
+        /** ac: Audio Context instance */
+        this.ac =
+            params.audioContext ||
+            (this.supportsWebAudio() ? this.getAudioContext() : {});
+        /**@private */
+        this.lastPlay = this.ac.currentTime;
+        /** @private */
+        this.startPosition = 0;
+        /** @private */
+        this.scheduledPause = null;
+        /** @private */
+        this.states = {
+            [PLAYING]: Object.create(this.stateBehaviors[PLAYING]),
+            [PAUSED]: Object.create(this.stateBehaviors[PAUSED]),
+            [FINISHED]: Object.create(this.stateBehaviors[FINISHED]),
+        };
+        /** @private */
+        this.buffer = null;
+        /** @private */
+        this.filters = [];
+        /** gainNode: allows to control audio volume */
+        this.gainNode = null;
+        /** @private */
+        this.mergedPeaks = null;
+        /** @private */
+        this.offlineAc = null;
+        /** @private */
+        this.peaks = null;
+        /** @private */
+        this.playbackRate = 1;
+        /** analyser: provides audio analysis information */
+        this.analyser = null;
+        /** scriptNode: allows processing audio */
+        this.scriptNode = null;
+        /** @private */
+        this.source = null;
+        /** @private */
+        this.splitPeaks = [];
+        /** @private */
+        this.state = null;
+        /** @private */
+        this.explicitDuration = params.duration;
+        /**
+         * Boolean indicating if the backend was destroyed.
+         */
+        this.destroyed = false;
+    }
 
     /**
      * Does the browser support this backend
@@ -95,63 +147,6 @@ export default class WebAudio extends util.Observer {
     }
 
     /**
-     * Construct the backend
-     *
-     * @param {WavesurferParams} params Wavesurfer parameters
-     */
-    constructor(params) {
-        super();
-        /** @private */
-        this.params = params;
-        /** ac: Audio Context instance */
-        this.ac =
-            params.audioContext ||
-            (this.supportsWebAudio() ? this.getAudioContext() : {});
-        /**@private */
-        this.lastPlay = this.ac.currentTime;
-        /** @private */
-        this.startPosition = 0;
-        /** @private */
-        this.scheduledPause = null;
-        /** @private */
-        this.states = {
-            [PLAYING]: Object.create(this.stateBehaviors[PLAYING]),
-            [PAUSED]: Object.create(this.stateBehaviors[PAUSED]),
-            [FINISHED]: Object.create(this.stateBehaviors[FINISHED])
-        };
-        /** @private */
-        this.buffer = null;
-        /** @private */
-        this.filters = [];
-        /** gainNode: allows to control audio volume */
-        this.gainNode = null;
-        /** @private */
-        this.mergedPeaks = null;
-        /** @private */
-        this.offlineAc = null;
-        /** @private */
-        this.peaks = null;
-        /** @private */
-        this.playbackRate = 1;
-        /** analyser: provides audio analysis information */
-        this.analyser = null;
-        /** scriptNode: allows processing audio */
-        this.scriptNode = null;
-        /** @private */
-        this.source = null;
-        /** @private */
-        this.splitPeaks = [];
-        /** @private */
-        this.state = null;
-        /** @private */
-        this.explicitDuration = params.duration;
-        /**
-         * Boolean indicating if the backend was destroyed.
-         */
-        this.destroyed = false;
-    }
-
-    /**
      * Initialise the backend, called in `wavesurfer.createBackend()`
      */
     init() {
@@ -167,7 +162,7 @@ export default class WebAudio extends util.Observer {
     /** @private */
     disconnectFilters() {
         if (this.filters) {
-            this.filters.forEach(filter => {
+            this.filters.forEach((filter) => {
                 filter && filter.disconnect();
             });
             this.filters = null;
@@ -243,18 +238,17 @@ export default class WebAudio extends util.Observer {
         this.scriptNode.connect(this.ac.destination);
     }
 
-    /** @private */
-    addOnAudioProcess() {
+    private addOnAudioProcess() {
         this.scriptNode.onaudioprocess = () => {
             const time = this.getCurrentTime();
 
             if (time >= this.getDuration()) {
                 this.setState(FINISHED);
-                this.fireEvent('pause');
+                this.fireEvent("pause");
             } else if (time >= this.scheduledPause) {
                 this.pause();
             } else if (this.state === this.states[PLAYING]) {
-                this.fireEvent('audioprocess', time);
+                this.fireEvent("audioprocess", time);
             }
         };
     }
@@ -301,7 +295,7 @@ export default class WebAudio extends util.Observer {
             let audio = new window.Audio();
             if (!audio.setSinkId) {
                 return Promise.reject(
-                    new Error('setSinkId is not supported in your browser')
+                    new Error("setSinkId is not supported in your browser")
                 );
             }
             audio.autoplay = true;
@@ -312,7 +306,7 @@ export default class WebAudio extends util.Observer {
 
             return audio.setSinkId(deviceId);
         } else {
-            return Promise.reject(new Error('Invalid deviceId: ' + deviceId));
+            return Promise.reject(new Error("Invalid deviceId: " + deviceId));
         }
     }
 
@@ -350,7 +344,7 @@ export default class WebAudio extends util.Observer {
         }
         this.offlineAc.decodeAudioData(
             arraybuffer,
-            data => callback(data),
+            (data) => callback(data),
             errback
         );
     }
@@ -514,8 +508,8 @@ export default class WebAudio extends util.Observer {
         if (this.params.closeAudioContext) {
             // check if browser supports AudioContext.close()
             if (
-                typeof this.ac.close === 'function' &&
-                this.ac.state != 'closed'
+                typeof this.ac.close === "function" &&
+                this.ac.state != "closed"
             ) {
                 this.ac.close();
             }
@@ -633,7 +627,7 @@ export default class WebAudio extends util.Observer {
 
         return {
             start: start,
-            end: end
+            end: end,
         };
     }
 
@@ -670,13 +664,13 @@ export default class WebAudio extends util.Observer {
 
         this.source.start(0, start);
 
-        if (this.ac.state == 'suspended') {
+        if (this.ac.state == "suspended") {
             this.ac.resume && this.ac.resume();
         }
 
         this.setState(PLAYING);
 
-        this.fireEvent('play');
+        this.fireEvent("play");
     }
 
     /**
@@ -690,7 +684,7 @@ export default class WebAudio extends util.Observer {
 
         this.setState(PAUSED);
 
-        this.fireEvent('pause');
+        this.fireEvent("pause");
     }
 
     /**

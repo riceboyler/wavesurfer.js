@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+        "baseUrl": "./src",
+        "outDir": "dist/tsout",
+        "module": "commonjs",
+        "target": "ESNext",
+        "moduleResolution": "Node",
+        "lib": ["es2015", "es6", "es7", "ESNext", "dom", "ScriptHost"],
+        "sourceMap": false,
+        "allowJs": true,
+        "forceConsistentCasingInFileNames": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "noImplicitReturns": false,
+        "noImplicitThis": true,
+        "noImplicitAny": false,
+        "strictNullChecks": true,
+        "suppressImplicitAnyIndexErrors": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "allowSyntheticDefaultImports": true,
+        "preserveSymlinks": true,
+
+        "esModuleInterop": true
+    },
+    "exclude": ["node_modules", "dist", "example"]
+}
