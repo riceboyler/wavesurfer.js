@@ -2,9 +2,14 @@
  * @since 3.0.0
  */
 
-import Observer from './observer';
+import Observer from "./observer";
 
-class ProgressHandler {
+interface IProgressHandler {}
+
+class ProgressHandler implements IProgressHandler {
+    private instance: Observer;
+    private total: number;
+    private loaded: number;
     /**
      * Instantiate ProgressHandler
      *
@@ -12,9 +17,9 @@ class ProgressHandler {
      * @param {Number} contentLength Content length.
      * @param {Response} response Response object.
      */
-    constructor(instance, contentLength, response) {
+    constructor(instance: Observer, contentLength: string, response: Response) {
         this.instance = instance;
-        this.instance._reader = response.body.getReader();
+        this.instance._reader = response.body ? response.body.getReader() : {};
 
         this.total = parseInt(contentLength, 10);
         this.loaded = 0;
@@ -27,7 +32,7 @@ class ProgressHandler {
      * @param {ReadableStreamDefaultController} controller Controller instance
      *     used to control the stream.
      */
-    start(controller) {
+    start(controller: ReadableStreamDefaultController) {
         const read = () => {
             // instance._reader.read() returns a promise that resolves
             // when a value has been received
@@ -43,7 +48,7 @@ class ProgressHandler {
                             this.instance.onProgress.call(this.instance, {
                                 loaded: this.loaded,
                                 total: this.total,
-                                lengthComputable: false
+                                lengthComputable: false,
                             });
                         }
                         // no more data needs to be consumed, close the stream
@@ -55,13 +60,13 @@ class ProgressHandler {
                     this.instance.onProgress.call(this.instance, {
                         loaded: this.loaded,
                         total: this.total,
-                        lengthComputable: !(this.total === 0)
+                        lengthComputable: !(this.total === 0),
                     });
                     // enqueue the next data chunk into our target stream
                     controller.enqueue(value);
                     read();
                 })
-                .catch(error => {
+                .catch((error) => {
                     controller.error(error);
                 });
         };
@@ -111,11 +116,24 @@ class ProgressHandler {
  *     console.warn('fetchFile error: ', e);
  * });
  */
-export default function fetchFile(options) {
+
+interface FetchOptions {
+    url?: string;
+    method?: "GET" | "POST" | "PUT" | "DELETE" | "OPTIONS";
+    mode?: RequestMode;
+    credentials?: RequestCredentials;
+    cache?: RequestCache;
+    responseType?: "arraybuffer" | "blob" | "json" | "text";
+    requestHeaders?: Record<string, string>[];
+    redirect?: RequestRedirect;
+    referrer?: ReferrerPolicy;
+}
+
+export default function fetchFile(options: FetchOptions) {
     if (!options) {
-        throw new Error('fetch options missing');
+        throw new Error("fetch options missing");
     } else if (!options.url) {
-        throw new Error('fetch url missing');
+        throw new Error("fetch url missing");
     }
     const instance = new Observer();
     const fetchHeaders = new Headers();
@@ -127,93 +145,89 @@ export default function fetchFile(options) {
     // check if headers have to be added
     if (options && options.requestHeaders) {
         // add custom request headers
-        options.requestHeaders.forEach(header => {
+        options.requestHeaders.forEach((header) => {
             fetchHeaders.append(header.key, header.value);
         });
     }
 
     // parse fetch options
-    const responseType = options.responseType || 'json';
+    const responseType = options.responseType || "json";
     const fetchOptions = {
-        method: options.method || 'GET',
+        method: options.method || "GET",
         headers: fetchHeaders,
-        mode: options.mode || 'cors',
-        credentials: options.credentials || 'same-origin',
-        cache: options.cache || 'default',
-        redirect: options.redirect || 'follow',
-        referrer: options.referrer || 'client',
-        signal: instance.controller.signal
+        mode: options.mode || "cors",
+        credentials: options.credentials || "same-origin",
+        cache: options.cache || "default",
+        redirect: options.redirect || "follow",
+        referrer: options.referrer || "client",
+        signal: instance.controller.signal,
     };
 
     fetch(fetchRequest, fetchOptions)
-        .then(response => {
+        .then((response: Response) => {
             // store response reference
             instance.response = response;
 
             let progressAvailable = true;
-            if (!response.body) {
+            const contentLength = response.headers.get("content-length");
+            if (!response.body || contentLength === null) {
                 // ReadableStream is not yet supported in this browser
                 // see https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream
-                progressAvailable = false;
-            }
 
-            // Server must send CORS header "Access-Control-Expose-Headers: content-length"
-            const contentLength = response.headers.get('content-length');
-            if (contentLength === null) {
                 // Content-Length server response header missing.
                 // Don't evaluate download progress if we can't compare against a total size
                 // see https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#Access-Control-Expose-Headers
                 progressAvailable = false;
             }
 
+            // Server must send CORS header "Access-Control-Expose-Headers: content-length"
             if (!progressAvailable) {
-                // not able to check download progress so skip it
                 return response;
-            }
+            } // fire progress event when during load
 
-            // fire progress event when during load
-            instance.onProgress = e => {
-                instance.fireEvent('progress', e);
+            instance.onProgress = (e) => {
+                instance.fireEvent("progress", e);
             };
 
+            // contentLength has already been null checked above, but TS isn't perfect, so...
             return new Response(
                 new ReadableStream(
-                    new ProgressHandler(instance, contentLength, response)
+                    new ProgressHandler(instance, contentLength || "", response)
                 ),
                 fetchOptions
             );
         })
-        .then(response => {
-            let errMsg;
+        .then((response: Response) => {
+            let errMsg: string = "";
             if (response.ok) {
                 switch (responseType) {
-                    case 'arraybuffer':
+                    case "arraybuffer":
                         return response.arrayBuffer();
 
-                    case 'json':
+                    case "json":
                         return response.json();
 
-                    case 'blob':
+                    case "blob":
                         return response.blob();
 
-                    case 'text':
+                    case "text":
                         return response.text();
 
                     default:
-                        errMsg = 'Unknown responseType: ' + responseType;
+                        errMsg = "Unknown responseType: " + responseType;
                         break;
                 }
             }
             if (!errMsg) {
-                errMsg = 'HTTP error status: ' + response.status;
+                errMsg = "HTTP error status: " + response.status;
             }
             throw new Error(errMsg);
         })
-        .then(response => {
-            instance.fireEvent('success', response);
+        .then((response) => {
+            instance.fireEvent("success", response);
         })
-        .catch(error => {
-            instance.fireEvent('error', error);
+        .catch((error) => {
+            instance.fireEvent("error", error);
         });
 
     // return the fetch request

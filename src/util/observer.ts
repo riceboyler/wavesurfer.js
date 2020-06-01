@@ -9,6 +9,7 @@
  * Observer class
  */
 export default class Observer {
+    private handlers: Array<any>;
     /**
      * Instantiate Observer
      */
@@ -18,7 +19,7 @@ export default class Observer {
          * @todo Initialise the handlers here already and remove the conditional
          * assignment in `on()`
          */
-        this.handlers = null;
+        this.handlers = [];
     }
     /**
      * Attach a handler function for an event.
@@ -42,7 +43,7 @@ export default class Observer {
         return {
             name: event,
             callback: fn,
-            un: (e, fn) => this.un(e, fn)
+            un: (e, fn) => this.un(e, fn),
         };
     }
 
@@ -112,7 +113,7 @@ export default class Observer {
         }
         const handlers = this.handlers[event];
         handlers &&
-            handlers.forEach(fn => {
+            handlers.forEach((fn) => {
                 fn(...args);
             });
     }
