@@ -9,14 +9,9 @@
  * let prefix = 'foo-';
  * console.log(getId(prefix)); // logs 'foo-b5pors4ru6g'
  */
-export default function getId(prefix) {
+export default function getId(prefix: string): string {
     if (prefix === undefined) {
-        prefix = 'wavesurfer_';
+        prefix = "wavesurfer_";
     }
-    return (
-        prefix +
-        Math.random()
-            .toString(32)
-            .substring(2)
-    );
+    return prefix + Math.random().toString(32).substring(2);
 }

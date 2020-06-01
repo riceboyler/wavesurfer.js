@@ -5,11 +5,17 @@
  * @property {function} un The function to call to remove the listener
  */
 
+interface ListenerDescriptor {
+    name: string;
+    callback: Function;
+    un: Function;
+}
+
 /**
  * Observer class
  */
 export default class Observer {
-    private handlers: Array<any>;
+    private handlers: Record<string, Function[]> | null;
     /**
      * Instantiate Observer
      */
@@ -19,7 +25,7 @@ export default class Observer {
          * @todo Initialise the handlers here already and remove the conditional
          * assignment in `on()`
          */
-        this.handlers = [];
+        this.handlers = null;
     }
     /**
      * Attach a handler function for an event.
@@ -28,7 +34,7 @@ export default class Observer {
      * @param {function} fn The callback to trigger when the event is fired
      * @return {ListenerDescriptor} The event descriptor
      */
-    on(event, fn) {
+    on(event: string, fn: Function): ListenerDescriptor {
         if (!this.handlers) {
             this.handlers = {};
         }
@@ -43,7 +49,7 @@ export default class Observer {
         return {
             name: event,
             callback: fn,
-            un: (e, fn) => this.un(e, fn),
+            un: (e: string, fn: Function) => this.un(e, fn),
         };
     }
 
@@ -54,7 +60,7 @@ export default class Observer {
      * removed listens to
      * @param {function} fn The callback that should be removed
      */
-    un(event, fn) {
+    un(event: string, fn: Function) {
         if (!this.handlers) {
             return;
         }
@@ -89,8 +95,8 @@ export default class Observer {
      * @param {function} handler The callback that is only to be called once
      * @return {ListenerDescriptor} The event descriptor
      */
-    once(event, handler) {
-        const fn = (...args) => {
+    once(event: string, handler: Function): ListenerDescriptor {
+        const fn = (...args: any) => {
             /*  eslint-disable no-invalid-this */
             handler.apply(this, args);
             /*  eslint-enable no-invalid-this */
@@ -107,7 +113,7 @@ export default class Observer {
      * @param {string} event The event to fire manually
      * @param {...any} args The arguments with which to call the listeners
      */
-    fireEvent(event, ...args) {
+    fireEvent(event: string, ...args: any) {
         if (!this.handlers) {
             return;
         }

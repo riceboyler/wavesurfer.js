@@ -1,4 +1,4 @@
-import reqAnimationFrame from './request-animation-frame';
+import reqAnimationFrame from "./request-animation-frame";
 
 /**
  * Create a function which will be called at the next requestAnimationFrame
@@ -8,6 +8,6 @@ import reqAnimationFrame from './request-animation-frame';
  *
  * @return {func} The function wrapped within a requestAnimationFrame
  */
-export default function frame(func) {
-    return (...args) => reqAnimationFrame(() => func(...args));
+export default function frame(func: Function): Function {
+    return (...args: any) => reqAnimationFrame(() => func(...args));
 }

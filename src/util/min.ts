@@ -5,9 +5,9 @@
  * @returns {Number} Smallest number found
  * @example console.log(min([1, 2, 3])); // logs 1
  */
-export default function min(values) {
+export default function min(values: number[]): number {
     let smallest = Number(Infinity);
-    Object.keys(values).forEach(i => {
+    Object.keys(values).forEach((i) => {
         if (values[i] < smallest) {
             smallest = values[i];
         }

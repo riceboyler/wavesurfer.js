@@ -6,8 +6,11 @@
  *
  * @return {HTMLElement} el
  */
-export default function style(el, styles) {
-    Object.keys(styles).forEach(prop => {
+export default function style(
+    el: HTMLElement,
+    styles: Record<string, string>[]
+): HTMLElement {
+    Object.keys(styles).forEach((prop) => {
         if (el.style[prop] !== styles[prop]) {
             el.style[prop] = styles[prop];
         }
